@@ -1752,14 +1752,10 @@ function chart(worked) {
   const days = daysThisMonth();
   const info = days.map(key => (worked[key] || 0.001).toFixed(2));
 
-  
-
   const bg = window.getComputedStyle(
     document.querySelector(`.bg-primary`),
     null
   ).backgroundColor;
-
-  console.log(bg);
 
   const data = {
     labels: days,
