@@ -1776,6 +1776,9 @@ function chart(worked) {
       line: {
         tension: 0 // disables bezier curves
       }
+    },
+    tooltips: {
+      mode: "nearest"
     }
   };
 
@@ -1794,10 +1797,7 @@ function chartToday() {
     datasets: [
       {
         data: [80.55, 1520.99],
-        backgroundColor: [
-          `#4D4D4D`,
-          `#FAA43A`,
-        ]
+        backgroundColor: [`#4D4D4D`, `#FAA43A`]
       }
     ],
 
@@ -1807,9 +1807,9 @@ function chartToday() {
   const options = {
     responsive: true,
     maintainAspectRatio: false,
-    elements: {
-      line: {
-        tension: 0 // disables bezier curves
+    legend: {
+      labels: {
+        fontColor: "white"
       }
     }
   };
@@ -1830,11 +1830,8 @@ function chartWeek() {
   const data = {
     datasets: [
       {
-        data: [15.00, 85.87],
-        backgroundColor: [
-          `#4D4D4D`,
-          `#FAA43A`,
-        ]
+        data: [15.0, 85.87],
+        backgroundColor: [`#6c757d`, `#f8f9fa`]
       }
     ],
 
@@ -1844,9 +1841,9 @@ function chartWeek() {
   const options = {
     responsive: true,
     maintainAspectRatio: false,
-    elements: {
-      line: {
-        tension: 0 // disables bezier curves
+    legend: {
+      labels: {
+        fontColor: "white"
       }
     }
   };
@@ -1868,10 +1865,7 @@ function chartMonth() {
     datasets: [
       {
         data: [40, 60],
-        backgroundColor: [
-          `#4D4D4D`,
-          `#FAA43A`,
-        ]
+        backgroundColor: [`#6c757d`, `#343a40`]
       }
     ],
 
@@ -1881,9 +1875,9 @@ function chartMonth() {
   const options = {
     responsive: true,
     maintainAspectRatio: false,
-    elements: {
-      line: {
-        tension: 0 // disables bezier curves
+    legend: {
+      labels: {
+        fontColor: "white"
       }
     }
   };
