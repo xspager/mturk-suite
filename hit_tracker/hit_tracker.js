@@ -1774,9 +1774,9 @@ function chart(worked) {
     maintainAspectRatio: false,
     elements: {
       line: {
-          tension: 0, // disables bezier curves
+        tension: 0 // disables bezier curves
       }
-  }
+    }
   };
 
   // eslint-disable-next-line
@@ -1786,3 +1786,114 @@ function chart(worked) {
     options
   });
 }
+
+function chartToday() {
+  const ctx = document.getElementById(`canvas-today`).getContext(`2d`);
+
+  const data = {
+    datasets: [
+      {
+        data: [80.55, 1520.99],
+        backgroundColor: [
+          `#4D4D4D`,
+          `#FAA43A`,
+        ]
+      }
+    ],
+
+    labels: ["Surveys", "Batches"]
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    elements: {
+      line: {
+        tension: 0 // disables bezier curves
+      }
+    }
+  };
+
+  // eslint-disable-next-line
+  new Chart(ctx, {
+    type: "doughnut",
+    data,
+    options
+  });
+}
+
+chartToday();
+
+function chartWeek() {
+  const ctx = document.getElementById(`canvas-week`).getContext(`2d`);
+
+  const data = {
+    datasets: [
+      {
+        data: [15.00, 85.87],
+        backgroundColor: [
+          `#4D4D4D`,
+          `#FAA43A`,
+        ]
+      }
+    ],
+
+    labels: ["Surveys", "Batches"]
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    elements: {
+      line: {
+        tension: 0 // disables bezier curves
+      }
+    }
+  };
+
+  // eslint-disable-next-line
+  new Chart(ctx, {
+    type: "doughnut",
+    data,
+    options
+  });
+}
+
+chartWeek();
+
+function chartMonth() {
+  const ctx = document.getElementById(`canvas-month`).getContext(`2d`);
+
+  const data = {
+    datasets: [
+      {
+        data: [40, 60],
+        backgroundColor: [
+          `#4D4D4D`,
+          `#FAA43A`,
+        ]
+      }
+    ],
+
+    labels: ["Surveys", "Batches"]
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    elements: {
+      line: {
+        tension: 0 // disables bezier curves
+      }
+    }
+  };
+
+  // eslint-disable-next-line
+  new Chart(ctx, {
+    type: "doughnut",
+    data,
+    options
+  });
+}
+
+chartMonth();

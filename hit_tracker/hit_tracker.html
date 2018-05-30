@@ -51,16 +51,34 @@
             <div class="tab-pane active" id="today" role="tabpanel">
                 <div class="container-fluid">
                     <div class="row mt-1">
-                        <div class="col-md-4 text-white">
-                            <h3 class="bg-primary p-5 text-center">Today: $0.00</h3>
+                        <div class="col-md-4 text-white p-1">
+                            <div class="bg-primary">
+                                <small>Today</small>
+                                <h3 class="p-4 text-center">$0.00</h3>
+                                <div class="chart-container" style="position: relative; height:150px; width:100%">
+                                    <canvas id="canvas-today"></canvas>
+                                </div>
+                            </div>
                         </div>
 
-                        <div class="col-md-4 text-white">
-                            <h3 class="bg-primary p-5 text-center">Week: $0.00</h3>
+                        <div class="col-md-4 text-white p-1">
+                            <div class="bg-primary">
+                                <small>Week</small>
+                                <h3 class="p-4 text-center">$0.00</h3>
+                                <div class="chart-container" style="position: relative; height:150px; width:100%">
+                                    <canvas id="canvas-week"></canvas>
+                                </div>
+                            </div>
                         </div>
 
-                        <div class="col-md-4 text-white">
-                            <h3 class="bg-primary p-5 text-center">Month: $0.00</h3>
+                        <div class="col-md-4 text-white p-1">
+                            <div class="bg-primary">
+                                <small>Month</small>
+                                <h3 class="p-4 text-center">$0.00</h3>
+                                <div class="chart-container" style="position: relative; height:150px; width:100%">
+                                    <canvas id="canvas-month"></canvas>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="col-md-4 text-white">
