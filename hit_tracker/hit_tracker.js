@@ -1747,6 +1747,11 @@ function daysThisMonth() {
   return result;
 }
 
+function chartColor(color) {
+  return window.getComputedStyle(document.getElementById(color), null)
+    .backgroundColor;
+}
+
 function chart(worked) {
   const ctx = document.getElementById(`daily-earnings-chart`).getContext(`2d`);
   const days = daysThisMonth();
@@ -1822,7 +1827,8 @@ function chartToday() {
   });
 }
 
-chartToday();
+
+setTimeout(chartToday, 100);
 
 function chartWeek() {
   const ctx = document.getElementById(`canvas-week`).getContext(`2d`);
@@ -1831,7 +1837,7 @@ function chartWeek() {
     datasets: [
       {
         data: [15.0, 85.87],
-        backgroundColor: [`#6c757d`, `#f8f9fa`]
+        backgroundColor: [chartColor(`bg-secondary`), chartColor(`bg-light`)]
       }
     ],
 
@@ -1856,7 +1862,7 @@ function chartWeek() {
   });
 }
 
-chartWeek();
+setTimeout(chartWeek, 100);
 
 function chartMonth() {
   const ctx = document.getElementById(`canvas-month`).getContext(`2d`);
@@ -1865,12 +1871,14 @@ function chartMonth() {
     datasets: [
       {
         data: [40, 60],
-        backgroundColor: [`#6c757d`, `#343a40`]
+        backgroundColor: [chartColor(`bg-secondary`), chartColor(`bg-dark`)]
       }
     ],
 
     labels: ["Surveys", "Batches"]
   };
+
+  console.log(data)
 
   const options = {
     responsive: true,
@@ -1890,4 +1898,4 @@ function chartMonth() {
   });
 }
 
-chartMonth();
+setTimeout(chartMonth, 100);
