@@ -175,6 +175,7 @@ function todaysOverviewDisplay() {
 async function trackerOverview() {
   const data = await trackerOverviewData();
   trackerOverviewDisplay(data);
+  chart(data.days);
 }
 
 function trackerOverviewData() {
@@ -182,7 +183,8 @@ function trackerOverviewData() {
     week: { count: 0, value: 0 },
     month: { count: 0, value: 0 },
     pending: { count: 0, value: 0 },
-    approved: { count: 0, value: 0 }
+    approved: { count: 0, value: 0 },
+    days: {}
   };
 
   return new Promise(resolve => {
@@ -221,8 +223,15 @@ function trackerOverviewData() {
 
       if (cursor) {
         if (cursor.value.state.match(/Submitted|Pending|Approved|Paid/)) {
-          promiseData.month.count++;
+          promiseData.month.count += 1;
           promiseData.month.value += cursor.value.reward.amount_in_dollars;
+
+          const day = cursor.value.date.slice(-2);
+          if (promiseData.days[day]) {
+            promiseData.days[day] += cursor.value.reward.amount_in_dollars;
+          } else {
+            promiseData.days[day] = cursor.value.reward.amount_in_dollars;
+          }
         }
         cursor.continue();
       }
@@ -1717,4 +1726,62 @@ function toMoneyString() {
   return `$${Number(string)
     .toFixed(2)
     .toLocaleString(`en-US`, { minimumFractionDigits: 2 })}`;
+}
+
+function daysThisMonth() {
+  const date = new Date(Date.now());
+  const toPST = date.toLocaleString(`en-US`, {
+    timeZone: `America/Los_Angeles`
+  });
+  const isPST = new Date(toPST);
+  const month = isPST.getMonth();
+  isPST.setDate(1);
+
+  const result = [];
+
+  while (isPST.getMonth() === month) {
+    const day = isPST.getDate();
+    result.push(`0${day}`.slice(-2));
+    isPST.setDate(day + 1);
+  }
+  return result;
+}
+
+function chart(worked) {
+  const ctx = document.getElementById(`daily-earnings-chart`).getContext(`2d`);
+  const days = daysThisMonth();
+  const info = days.map(key => (worked[key] || 0.001).toFixed(2));
+
+  
+
+  const bg = window.getComputedStyle(
+    document.querySelector(`.bg-primary`),
+    null
+  ).backgroundColor;
+
+  console.log(bg);
+
+  const data = {
+    labels: days,
+    datasets: [
+      {
+        label: `Daily Earnings`,
+        data: info,
+        backgroundColor: bg.replace(`)`, `, 0.2)`),
+        borderColor: bg
+      }
+    ]
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false
+  };
+
+  // eslint-disable-next-line
+  new Chart(ctx, {
+    type: "line",
+    data,
+    options
+  });
 }

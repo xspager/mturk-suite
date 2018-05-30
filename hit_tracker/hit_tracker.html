@@ -18,24 +18,31 @@
 
 <body>
     <nav class="navbar navbar-light bg-primary">
-        <span class="navbar-brand mb-0 text-white">Mturk Suite - HIT Tracker</span>
+        <span class="navbar-brand text-white">HIT Tracker</span>
         <div class="float-right">
             <div class="btn-group">
-                <button type="button" class="btn btn-secondary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                <button type="button" class="btn btn-sm btn-secondary dropdown-toggle" data-toggle="dropdown">
                     Sync
                 </button>
                 <div class="dropdown-menu dropdown-menu-right">
-                    <button id="sync-today" class="dropdown-item" type="button">Today</button>
-                    <button id="sync-last-45-days" class="dropdown-item" type="button">Last 45 Days</button>
+                    <button class="dropdown-item" type="button" id="sync-today">Today</button>
+                    <button class="dropdown-item" type="button" id="sync-last-45-days" >Last 45 Days</button>
                 </div>
             </div>
-            <button id="import" type="button" class="btn btn-secondary">Import</button>
-            <button id="export" type="button" class="btn btn-secondary">Export</button>
+            <button id="import" type="button" class="btn btn-sm btn-secondary">Import</button>
+            <button id="export" type="button" class="btn btn-sm btn-secondary">Export</button>
 
             <input id="import-file" type="file" style="display: none;" />
             <a id="export-file" style="display: none;" href download></a>
         </div>
     </nav>
+
+    <div class="p-1">
+        <div class="chart-container" style="position: relative; height:20vh; width:100%">
+            <canvas id="daily-earnings-chart"></canvas>
+        </div>
+            
+    </div>
 
     <div class="p-1">
         <ul class="nav nav-pills nav-justified" role="tablist">
