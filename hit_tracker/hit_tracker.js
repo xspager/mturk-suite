@@ -1802,7 +1802,7 @@ function chartToday() {
     datasets: [
       {
         data: [80.55, 1520.99],
-        backgroundColor: [`#4D4D4D`, `#FAA43A`]
+        backgroundColor: [chartColor(`bg-secondary`), chartColor(`bg-info`)]
       }
     ],
 
