@@ -26,7 +26,7 @@
                 </button>
                 <div class="dropdown-menu dropdown-menu-right">
                     <button class="dropdown-item" type="button" id="sync-today">Today</button>
-                    <button class="dropdown-item" type="button" id="sync-last-45-days" >Last 45 Days</button>
+                    <button class="dropdown-item" type="button" id="sync-last-45-days">Last 45 Days</button>
                 </div>
             </div>
             <button id="import" type="button" class="btn btn-sm btn-secondary">Import</button>
@@ -36,13 +36,6 @@
             <a id="export-file" style="display: none;" href download></a>
         </div>
     </nav>
-
-    <div class="p-1">
-        <div class="chart-container" style="position: relative; height:20vh; width:100%">
-            <canvas id="daily-earnings-chart"></canvas>
-        </div>
-            
-    </div>
 
     <div class="p-1">
         <ul class="nav nav-pills nav-justified" role="tablist">
@@ -57,6 +50,36 @@
         <div class="tab-content">
             <div class="tab-pane active" id="today" role="tabpanel">
                 <div class="container-fluid">
+                    <div class="row mt-1">
+                        <div class="col-md-4 text-white">
+                            <h3 class="bg-primary p-5 text-center">Today: $0.00</h3>
+                        </div>
+
+                        <div class="col-md-4 text-white">
+                            <h3 class="bg-primary p-5 text-center">Week: $0.00</h3>
+                        </div>
+
+                        <div class="col-md-4 text-white">
+                            <h3 class="bg-primary p-5 text-center">Month: $0.00</h3>
+                        </div>
+
+                        <div class="col-md-4 text-white">
+                            <h3 class="bg-primary p-5 text-center">Pending: $0.00</h3>
+                        </div>
+
+                        <div class="col-md-4 text-white">
+                            <h3 class="bg-primary p-5 text-center">Waiting Payment: $0.00</h3>
+                        </div>
+
+                        <div class="col-md-4 text-white">
+                            <h3 class="bg-primary p-5 text-center">Avail To Transfer: $0.00</h3>
+                        </div>
+                    </div>
+
+                    <div class="chart-container" style="position: relative; height:20vh; width:100%">
+                        <canvas id="daily-earnings-chart"></canvas>
+                    </div>
+
                     <div class="row">
                         <div class="col-md-6">
                             <h3 class="text-center text-primary">Today's Overview</h3>

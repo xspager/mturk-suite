@@ -1771,7 +1771,12 @@ function chart(worked) {
 
   const options = {
     responsive: true,
-    maintainAspectRatio: false
+    maintainAspectRatio: false,
+    elements: {
+      line: {
+          tension: 0, // disables bezier curves
+      }
+  }
   };
 
   // eslint-disable-next-line
