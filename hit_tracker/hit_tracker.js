@@ -1873,6 +1873,10 @@ function createBarChart(card, groups) {
           }
         }
       ]
+    },
+    tooltips: {
+      position: "average",
+      intersect: false
     }
   };
 
@@ -2152,7 +2156,7 @@ async function overviewToday() {
 
   transaction.oncomplete = () => {
     const card = document.getElementById(`overview-today`);
-    createBarChart(card, groups);
+    createDoughnutChart(card, groups);
   };
 }
 
