@@ -1752,11 +1752,6 @@ function chart(worked) {
   const days = daysThisMonth();
   const info = days.map(key => (worked[key] || 0.001).toFixed(2));
 
-  const bg = window.getComputedStyle(
-    document.querySelector(`.bg-primary`),
-    null
-  ).backgroundColor;
-
   const data = {
     labels: days,
     datasets: [
@@ -1778,12 +1773,38 @@ function chart(worked) {
       }
     },
     tooltips: {
-      mode: "nearest"
+      position: "average",
+      intersect: false
     },
     legend: {
       labels: {
         fontColor: "white"
       }
+    },
+    scales: {
+      xAxes: [
+        {
+          gridLines: {
+            color: `#FFFFFF`
+            // display: false,
+          },
+          ticks: {
+            fontColor: `#FFFFFF` // this here
+          }
+        }
+      ],
+      yAxes: [
+        {
+          // display: false,
+          gridLines: {
+            color: `#FFFFFF`
+            // display: false,
+          },
+          ticks: {
+            fontColor: `#FFFFFF` // this here
+          }
+        }
+      ]
     }
   };
 
@@ -1793,6 +1814,74 @@ function chart(worked) {
     data,
     options
   });
+}
+
+function createBarChart(card, groups) {
+  const reduced = Object.keys(groups).reduce(
+    (acc, cV) => {
+      if (groups[cV].count > 1) acc.batches += groups[cV].value;
+      else acc.surveys += groups[cV].value;
+      acc.total += groups[cV].value;
+      return acc;
+    },
+    { surveys: 0, batches: 0, total: 0 }
+  );
+
+  console.log(`surveys ${reduced.surveys.toFixed(2)}`, `batches ${reduced.batches.toFixed(2)}`)
+
+  const data = {
+    datasets: [
+      {
+        data: [reduced.surveys.toFixed(2), reduced.batches.toFixed(2)],
+        backgroundColor: [`#6c757d`, `#343a40`]
+      }
+    ],
+
+    labels: ["Surveys", "Batches"]
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    legend: {
+      display: false
+    },
+    scales: {
+      xAxes: [
+        {
+          gridLines: {
+            color: `#FFFFFF`
+            // display: false,
+          },
+          ticks: {
+            fontColor: `#FFFFFF` // this here
+          }
+        }
+      ],
+      yAxes: [
+        {
+          // display: false,
+          gridLines: {
+            color: `#FFFFFF`
+            // display: false,
+          },
+          ticks: {
+            fontColor: `#FFFFFF` // this here
+          }
+        }
+      ]
+    }
+  };
+
+  // eslint-disable-next-line
+  new Chart(card.querySelector(`canvas`).getContext(`2d`), {
+    type: "bar",
+    data,
+    options
+  });
+
+  // eslint-disable-next-line
+  card.querySelector(`h3`).textContent = `$${reduced.total.toFixed(2)}`;
 }
 
 function createDoughnutChart(card, groups) {
@@ -1805,6 +1894,8 @@ function createDoughnutChart(card, groups) {
     },
     { surveys: 0, batches: 0, total: 0 }
   );
+
+  console.log(`surveys ${reduced.surveys.toFixed(2)}`, `batches ${reduced.batches.toFixed(2)}`)
 
   const data = {
     datasets: [
@@ -1837,6 +1928,64 @@ function createDoughnutChart(card, groups) {
 
   // eslint-disable-next-line
   card.querySelector(`h3`).textContent = `$${reduced.total.toFixed(2)}`;
+}
+
+function createSpreadChart(spread) {
+  const data = {
+    labels: [
+      `$0.00 - $0.04`,
+      `$0.05 - $0.09`,
+      `$0.10 - $0.19`,
+      `$0.20 - $0.49`,
+      `$0.50 - $0.99`,
+      `$1.00+`
+    ],
+    datasets: [
+      {
+        label: `HITs This Month`,
+        data: [
+          spread[`0-4`],
+          spread[`5-9`],
+          spread[`10-19`],
+          spread[`20-49`],
+          spread[`50-99`],
+          spread[`100+`]
+        ],
+        backgroundColor: "#6c757d",
+        borderColor: "#343a40"
+      }
+    ]
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scale: {
+      gridLines: { color: "white" },
+      angleLines: { color: "white" },
+      pointLabels: { fontColor: "white" },
+      ticks: {
+        display: false,
+        maxTicksLimit: 3
+      }
+    },
+    legend: {
+      position: `left`,
+      labels: {
+        fontColor: "white"
+      }
+    },
+    tooltips: {
+      intersect: false
+    }
+  };
+
+  // eslint-disable-next-line
+  new Chart(document.getElementById(`daily-earnings-spread`).getContext(`2d`), {
+    type: "radar",
+    data,
+    options
+  });
 }
 
 async function overviewToday() {
@@ -1914,7 +2063,7 @@ async function overviewToday() {
 
   transaction.oncomplete = () => {
     const card = document.getElementById(`overview-today`);
-    createDoughnutChart(card, groups);
+    createBarChart(card, groups);
   };
 }
 
@@ -1968,6 +2117,14 @@ async function overviewMonth() {
   const range = IDBKeyRange.bound(month.start, month.end);
 
   const groups = {};
+  const spread = {
+    "0-4": 0,
+    "5-9": 0,
+    "10-19": 0,
+    "20-49": 0,
+    "50-99": 0,
+    "100+": 0
+  };
 
   objectStore.index(`date`).openCursor(range).onsuccess = event => {
     const cursor = event.target.result;
@@ -1989,7 +2146,15 @@ async function overviewMonth() {
           groups[groupKey].count += 1;
           groups[groupKey].value += amount_in_dollars;
         }
+
+        if (amount_in_dollars > 1.0) spread[`100+`] += 1;
+        else if (amount_in_dollars > 0.5) spread[`50-99`] += 1;
+        else if (amount_in_dollars > 0.2) spread[`20-49`] += 1;
+        else if (amount_in_dollars > 0.1) spread[`10-19`] += 1;
+        else if (amount_in_dollars > 0.05) spread[`5-9`] += 1;
+        else spread[`0-4`] += 1;
       }
+
       cursor.continue();
     }
   };
@@ -1997,6 +2162,7 @@ async function overviewMonth() {
   transaction.oncomplete = () => {
     const card = document.getElementById(`overview-month`);
     createDoughnutChart(card, groups);
+    createSpreadChart(spread);
   };
 }
 
