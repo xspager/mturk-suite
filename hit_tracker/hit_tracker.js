@@ -1945,8 +1945,8 @@ function createSpreadChart(spread) {
       {
         label: `HITs This Month`,
         data: [
-          spread[`0-4`],
-          spread[`5-9`],
+          spread[`0-4`] > 200 ? 200 : spread[`0-4`],
+          spread[`5-9`] > 200 ? 200 : spread[`5-9`],
           spread[`10-19`],
           spread[`20-49`],
           spread[`50-99`],
