@@ -1931,6 +1931,7 @@ function createDoughnutChart(card, groups) {
 }
 
 function createSpreadChart(spread) {
+  console.log(`radar spread`, spread);
   const data = {
     labels: [
       `$0.00 - $0.04`,
@@ -1956,6 +1957,8 @@ function createSpreadChart(spread) {
       }
     ]
   };
+
+  console.log(`radar data`, data);
 
   const options = {
     responsive: true,
