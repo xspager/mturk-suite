@@ -1827,7 +1827,10 @@ function createBarChart(card, groups) {
     { surveys: 0, batches: 0, total: 0 }
   );
 
-  console.log(`surveys ${reduced.surveys.toFixed(2)}`, `batches ${reduced.batches.toFixed(2)}`)
+  console.log(
+    `surveys ${reduced.surveys.toFixed(2)}`,
+    `batches ${reduced.batches.toFixed(2)}`
+  );
 
   const data = {
     datasets: [
@@ -1895,7 +1898,10 @@ function createDoughnutChart(card, groups) {
     { surveys: 0, batches: 0, total: 0 }
   );
 
-  console.log(`surveys ${reduced.surveys.toFixed(2)}`, `batches ${reduced.batches.toFixed(2)}`)
+  console.log(
+    `surveys ${reduced.surveys.toFixed(2)}`,
+    `batches ${reduced.batches.toFixed(2)}`
+  );
 
   const data = {
     datasets: [
@@ -1931,7 +1937,86 @@ function createDoughnutChart(card, groups) {
 }
 
 function createSpreadChart(spread) {
-  console.log(`radar spread`, spread);
+  const data = {
+    datasets: [
+      {
+        data: [
+          spread[`0-4`],
+          spread[`5-9`],
+          spread[`10-19`],
+          spread[`20-49`],
+          spread[`50-99`],
+          spread[`100+`]
+        ],
+        backgroundColor: [
+          `#6c757d`,
+          `#343a40`,
+          `#6c757d`,
+          `#343a40`,
+          `#6c757d`,
+          `#343a40`
+        ]
+      }
+    ],
+
+    labels: [
+      `$0.00 - $0.04`,
+      `$0.05 - $0.09`,
+      `$0.10 - $0.19`,
+      `$0.20 - $0.49`,
+      `$0.50 - $0.99`,
+      `$1.00+`
+    ]
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    legend: {
+      display: false
+    },
+    scales: {
+      xAxes: [
+        {
+          gridLines: {
+            color: `#FFFFFF`
+            // display: false,
+          },
+          ticks: {
+            fontColor: `#FFFFFF` // this here
+          }
+        }
+      ],
+      yAxes: [
+        {
+          // display: false,
+          gridLines: {
+            color: `#FFFFFF`
+            // display: false,
+          },
+          ticks: {
+            fontColor: `#FFFFFF` // this here
+          }
+        }
+      ]
+    }
+  };
+
+  // eslint-disable-next-line
+  new Chart(document.getElementById(`daily-earnings-spread`), {
+    type: "bar",
+    data,
+    options
+  });
+}
+/*
+function createSpreadChart(spread) {
+  const scaled = Object.keys(spread).reduce((acc, cV) => {
+    const scale = Math.round(spread[cV] / spread.total * 10);
+    acc[cV] = scale > 0 ? scale : 1;
+    return acc;
+  }, {});
+
   const data = {
     labels: [
       `$0.00 - $0.04`,
@@ -1945,12 +2030,12 @@ function createSpreadChart(spread) {
       {
         label: `HITs This Month`,
         data: [
-          spread[`0-4`] > 200 ? 200 : spread[`0-4`],
-          spread[`5-9`] > 200 ? 200 : spread[`5-9`],
-          spread[`10-19`],
-          spread[`20-49`],
-          spread[`50-99`],
-          spread[`100+`]
+          scaled[`0-4`],
+          scaled[`5-9`],
+          scaled[`10-19`],
+          scaled[`20-49`],
+          scaled[`50-99`],
+          scaled[`100+`]
         ],
         backgroundColor: "#6c757d",
         borderColor: "#343a40"
@@ -1990,6 +2075,7 @@ function createSpreadChart(spread) {
     options
   });
 }
+*/
 
 async function overviewToday() {
   const transaction = hitTrackerDB.transaction([`hit`], `readonly`);
@@ -2126,7 +2212,8 @@ async function overviewMonth() {
     "10-19": 0,
     "20-49": 0,
     "50-99": 0,
-    "100+": 0
+    "100+": 0,
+    total: 0
   };
 
   objectStore.index(`date`).openCursor(range).onsuccess = event => {
@@ -2156,6 +2243,8 @@ async function overviewMonth() {
         else if (amount_in_dollars > 0.1) spread[`10-19`] += 1;
         else if (amount_in_dollars > 0.05) spread[`5-9`] += 1;
         else spread[`0-4`] += 1;
+
+        spread.total += 1;
       }
 
       cursor.continue();
