@@ -1830,7 +1830,7 @@ function createDoughnutChart(card, groups) {
 
   // eslint-disable-next-line
   new Chart(card.querySelector(`canvas`).getContext(`2d`), {
-    type: "doughnut",
+    type: "pie",
     data,
     options
   });
