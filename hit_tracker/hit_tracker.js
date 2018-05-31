@@ -1747,11 +1747,6 @@ function daysThisMonth() {
   return result;
 }
 
-function chartColor(color) {
-  return window.getComputedStyle(document.getElementById(color), null)
-    .backgroundColor;
-}
-
 function chart(worked) {
   const ctx = document.getElementById(`daily-earnings-chart`).getContext(`2d`);
   const days = daysThisMonth();
@@ -1768,8 +1763,8 @@ function chart(worked) {
       {
         label: `Daily Earnings`,
         data: info,
-        backgroundColor: bg.replace(`)`, `, 0.2)`),
-        borderColor: bg
+        backgroundColor: `#6c757d`,
+        borderColor: `#343a40`
       }
     ]
   };
@@ -1784,6 +1779,11 @@ function chart(worked) {
     },
     tooltips: {
       mode: "nearest"
+    },
+    legend: {
+      labels: {
+        fontColor: "white"
+      }
     }
   };
 
@@ -1795,14 +1795,22 @@ function chart(worked) {
   });
 }
 
-function chartToday() {
-  const ctx = document.getElementById(`canvas-today`).getContext(`2d`);
+function createDoughnutChart(card, groups) {
+  const reduced = Object.keys(groups).reduce(
+    (acc, cV) => {
+      if (groups[cV].count > 1) acc.batches += groups[cV].value;
+      else acc.surveys += groups[cV].value;
+      acc.total += groups[cV].value;
+      return acc;
+    },
+    { surveys: 0, batches: 0, total: 0 }
+  );
 
   const data = {
     datasets: [
       {
-        data: [80.55, 1520.99],
-        backgroundColor: [`#6c757d`, `#343a40`]//[chartColor(`bg-secondary`), chartColor(`bg-info`)]
+        data: [reduced.surveys.toFixed(2), reduced.batches.toFixed(2)],
+        backgroundColor: [`#6c757d`, `#343a40`]
       }
     ],
 
@@ -1814,88 +1822,273 @@ function chartToday() {
     maintainAspectRatio: false,
     legend: {
       labels: {
+        boxWidth: 20,
         fontColor: "white"
       }
     }
   };
 
   // eslint-disable-next-line
-  new Chart(ctx, {
+  new Chart(card.querySelector(`canvas`).getContext(`2d`), {
     type: "doughnut",
     data,
     options
   });
+
+  // eslint-disable-next-line
+  card.querySelector(`h3`).textContent = `$${reduced.total.toFixed(2)}`;
 }
 
+async function overviewToday() {
+  const transaction = hitTrackerDB.transaction([`hit`], `readonly`);
+  const objectStore = transaction.objectStore(`hit`);
+  const today = mturkDate();
+  const range = IDBKeyRange.only(today);
 
-setTimeout(chartToday, 100);
+  const assigned = { count: 0, value: 0 };
+  const submitted = { count: 0, value: 0 };
+  const approved = { count: 0, value: 0 };
+  const rejected = { count: 0, value: 0 };
+  const pending = { count: 0, value: 0 };
+  const returned = { count: 0, value: 0 };
+  const groups = {};
+  const requesters = {};
 
-function chartWeek() {
-  const ctx = document.getElementById(`canvas-week`).getContext(`2d`);
+  objectStore.index(`date`).openCursor(range).onsuccess = event => {
+    const cursor = event.target.result;
 
-  const data = {
-    datasets: [
-      {
-        data: [15.0, 85.87],
-        backgroundColor: [chartColor(`bg-secondary`), chartColor(`bg-light`)]
+    if (cursor) {
+      const hit = cursor.value;
+      const { state, reward, requester_id, requester_name, title } = hit;
+      const { amount_in_dollars } = reward;
+
+      if (state.match(/Submitted|Pending|Approved|Paid/)) {
+        submitted.count += 1;
+        submitted.value += amount_in_dollars;
+
+        if (state.match(/Approved|Paid/)) {
+          approved.count += 1;
+          approved.value += amount_in_dollars;
+        } else if (state.match(/Submitted|Pending/)) {
+          pending.count += 1;
+          pending.value += amount_in_dollars;
+        }
+
+        if (!requesters[requester_id]) {
+          requesters[requester_id] = {
+            id: requester_id,
+            name: hit.requester_name,
+            count: 1,
+            value: amount_in_dollars
+          };
+        } else {
+          requesters[requester_id].count += 1;
+          requesters[requester_id].value += amount_in_dollars;
+        }
+
+        const groupKey = requester_name + title + amount_in_dollars;
+
+        if (!groups[groupKey]) {
+          groups[groupKey] = {
+            count: 1,
+            value: amount_in_dollars
+          };
+        } else {
+          groups[groupKey].count += 1;
+          groups[groupKey].value += amount_in_dollars;
+        }
+      } else if (state.match(/Returned/)) {
+        returned.count += 1;
+        returned.value += amount_in_dollars;
+      } else if (state.match(/Rejected/)) {
+        rejected.count += 1;
+        rejected.value += amount_in_dollars;
       }
-    ],
 
-    labels: ["Surveys", "Batches"]
-  };
+      assigned.count += 1;
+      assigned.value += reward;
 
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    legend: {
-      labels: {
-        fontColor: "white"
-      }
+      cursor.continue();
     }
   };
 
-  // eslint-disable-next-line
-  new Chart(ctx, {
-    type: "doughnut",
-    data,
-    options
-  });
+  transaction.oncomplete = () => {
+    const card = document.getElementById(`overview-today`);
+    createDoughnutChart(card, groups);
+  };
 }
 
-setTimeout(chartWeek, 100);
+setTimeout(overviewToday, 100);
 
-function chartMonth() {
-  const ctx = document.getElementById(`canvas-month`).getContext(`2d`);
+async function overviewWeek() {
+  const transaction = hitTrackerDB.transaction([`hit`], `readonly`);
+  const objectStore = transaction.objectStore(`hit`);
+  const week = getWeekKludge();
+  const range = IDBKeyRange.bound(week.start, week.end);
 
-  const data = {
-    datasets: [
-      {
-        data: [40, 60],
-        backgroundColor: [chartColor(`bg-secondary`), chartColor(`bg-dark`)]
+  const groups = {};
+
+  objectStore.index(`date`).openCursor(range).onsuccess = event => {
+    const cursor = event.target.result;
+
+    if (cursor) {
+      const hit = cursor.value;
+      const { state, reward, requester_name, title } = hit;
+      const { amount_in_dollars } = reward;
+
+      if (state.match(/Submitted|Pending|Approved|Paid/)) {
+        const groupKey = requester_name + title + amount_in_dollars;
+
+        if (!groups[groupKey]) {
+          groups[groupKey] = {
+            count: 1,
+            value: amount_in_dollars
+          };
+        } else {
+          groups[groupKey].count += 1;
+          groups[groupKey].value += amount_in_dollars;
+        }
       }
-    ],
-
-    labels: ["Surveys", "Batches"]
-  };
-
-  console.log(data)
-
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    legend: {
-      labels: {
-        fontColor: "white"
-      }
+      cursor.continue();
     }
   };
 
-  // eslint-disable-next-line
-  new Chart(ctx, {
-    type: "doughnut",
-    data,
-    options
-  });
+  transaction.oncomplete = () => {
+    const card = document.getElementById(`overview-week`);
+    createDoughnutChart(card, groups);
+  };
 }
 
-setTimeout(chartMonth, 100);
+setTimeout(overviewWeek, 100);
+
+async function overviewMonth() {
+  const transaction = hitTrackerDB.transaction([`hit`], `readonly`);
+  const objectStore = transaction.objectStore(`hit`);
+  const month = getMonth();
+  const range = IDBKeyRange.bound(month.start, month.end);
+
+  const groups = {};
+
+  objectStore.index(`date`).openCursor(range).onsuccess = event => {
+    const cursor = event.target.result;
+
+    if (cursor) {
+      const hit = cursor.value;
+      const { state, reward, requester_name, title } = hit;
+      const { amount_in_dollars } = reward;
+
+      if (state.match(/Submitted|Pending|Approved|Paid/)) {
+        const groupKey = requester_name + title + amount_in_dollars;
+
+        if (!groups[groupKey]) {
+          groups[groupKey] = {
+            count: 1,
+            value: amount_in_dollars
+          };
+        } else {
+          groups[groupKey].count += 1;
+          groups[groupKey].value += amount_in_dollars;
+        }
+      }
+      cursor.continue();
+    }
+  };
+
+  transaction.oncomplete = () => {
+    const card = document.getElementById(`overview-month`);
+    createDoughnutChart(card, groups);
+  };
+}
+
+setTimeout(overviewMonth, 100);
+
+function trackerOverviewDatadd() {
+  const promiseData = {
+    week: { count: 0, value: 0 },
+    month: { count: 0, value: 0 },
+    pending: { count: 0, value: 0 },
+    approved: { count: 0, value: 0 },
+    days: {}
+  };
+
+  return new Promise(resolve => {
+    const transaction = hitTrackerDB.transaction([`hit`], `readonly`);
+    const objectStore = transaction.objectStore(`hit`);
+    const week = getWeekKludge();
+    const month = getMonth();
+
+    if (week.day === 0)
+      document.getElementById(`which-week`).textContent = `Last`;
+
+    // pending week
+    objectStore
+      .index(`date`)
+      .openCursor(
+        window.IDBKeyRange.bound(week.start, week.end)
+      ).onsuccess = event => {
+      const cursor = event.target.result;
+
+      if (cursor) {
+        if (cursor.value.state.match(/Submitted|Pending|Approved|Paid/)) {
+          promiseData.week.count++;
+          promiseData.week.value += cursor.value.reward.amount_in_dollars;
+        }
+        cursor.continue();
+      }
+    };
+
+    // pending month
+    objectStore
+      .index(`date`)
+      .openCursor(
+        window.IDBKeyRange.bound(month.start, month.end)
+      ).onsuccess = event => {
+      const cursor = event.target.result;
+
+      if (cursor) {
+        if (cursor.value.state.match(/Submitted|Pending|Approved|Paid/)) {
+          promiseData.month.count += 1;
+          promiseData.month.value += cursor.value.reward.amount_in_dollars;
+
+          const day = cursor.value.date.slice(-2);
+          if (promiseData.days[day]) {
+            promiseData.days[day] += cursor.value.reward.amount_in_dollars;
+          } else {
+            promiseData.days[day] = cursor.value.reward.amount_in_dollars;
+          }
+        }
+        cursor.continue();
+      }
+    };
+
+    // submitted pending approval or rejection
+    objectStore
+      .index(`state`)
+      .openCursor(window.IDBKeyRange.only(`Submitted`)).onsuccess = event => {
+      const cursor = event.target.result;
+
+      if (cursor) {
+        promiseData.pending.count++;
+        promiseData.pending.value += cursor.value.reward.amount_in_dollars;
+        cursor.continue();
+      }
+    };
+
+    // approved waiting payment
+    objectStore
+      .index(`state`)
+      .openCursor(window.IDBKeyRange.only(`Approved`)).onsuccess = event => {
+      const cursor = event.target.result;
+
+      if (cursor) {
+        promiseData.approved.count++;
+        promiseData.approved.value += cursor.value.reward.amount_in_dollars;
+        cursor.continue();
+      }
+    };
+
+    transaction.oncomplete = event => {
+      resolve(promiseData);
+    };
+  });
+}

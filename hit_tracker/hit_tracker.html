@@ -18,13 +18,13 @@
 
 <body>
     <div class="bg-primary" id="bg-primary" hidden></div>
-    <div class="bg-secondary" id="bg-secondary" ></div>
-    <div class="bg-success" id="bg-success" ></div>
-    <div class="bg-danger" id="bg-danger" ></div>
-    <div class="bg-warning" id="bg-warning" ></div>
-    <div class="bg-info" id="bg-info" ></div>
-    <div class="bg-light" id="bg-light" ></div>
-    <div class="bg-dark" id="bg-dark" ></div>
+    <div class="bg-secondary" id="bg-secondary"></div>
+    <div class="bg-success" id="bg-success"></div>
+    <div class="bg-danger" id="bg-danger"></div>
+    <div class="bg-warning" id="bg-warning"></div>
+    <div class="bg-info" id="bg-info"></div>
+    <div class="bg-light" id="bg-light"></div>
+    <div class="bg-dark" id="bg-dark"></div>
 
     <nav class="navbar navbar-light bg-primary">
         <span class="navbar-brand text-white">HIT Tracker</span>
@@ -59,76 +59,94 @@
         <div class="tab-content">
             <div class="tab-pane active" id="today" role="tabpanel">
                 <div class="container-fluid">
-                    <div class="row mt-1">
-                        <div class="col-md-4 text-white p-1">
+                    <div class="row">
+
+                        <div class="col-4 text-white mt-1" id="overview-today">
                             <div class="bg-primary container">
-                                <small>Today</small>
                                 <div class="row">
                                     <div class="col-6">
+                                        <small>Today</small>
                                         <h3 class="p-4 text-center">$0.00</h3>
                                     </div>
                                     <div class="col-6">
                                         <div class="chart-container" style="position: relative; height:150px; width:100%">
-                                            <canvas id="canvas-today"></canvas>
+                                            <canvas></canvas>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="col-md-4 text-white p-1">
+                        <div class="col-4 text-white mt-1" id="overview-week">
                             <div class="bg-primary container">
-                                <small>Week</small>
                                 <div class="row">
                                     <div class="col-6">
+                                        <small>This Week</small>
                                         <h3 class="p-4 text-center">$0.00</h3>
                                     </div>
                                     <div class="col-6">
                                         <div class="chart-container" style="position: relative; height:150px; width:100%">
-                                            <canvas id="canvas-week"></canvas>
-                                        </div>
-                                    </div>
-                                </div>
-
-
-                            </div>
-                        </div>
-
-                        <div class="col-md-4 text-white p-1">
-                            <div class="bg-primary container">
-                                <small>Month</small>
-
-                                <div class="row">
-                                    <div class="col-6">
-                                        <h3 class="p-4 text-center">$0.00</h3>
-                                    </div>
-                                    <div class="col-6">
-                                        <div class="chart-container" style="position: relative; height:150px; width:100%">
-                                            <canvas id="canvas-month"></canvas>
+                                            <canvas></canvas>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-
-                    </div>
-
-                    <div class="chart-container" style="position: relative; height:20vh; width:100%">
-                        <canvas id="daily-earnings-chart"></canvas>
-                    </div>
-
-                    <div class="row mt-1">
-                        <div class="col-md-4 text-white">
-                            <h3 class="bg-primary p-5 text-center">Pending: $0.00</h3>
+                        <div class="col-4 text-white mt-1" id="overview-month">
+                            <div class="bg-primary container">
+                                <div class="row">
+                                    <div class="col-6">
+                                        <small>This Month</small>
+                                        <h3 class="p-4 text-center">$0.00</h3>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="chart-container" style="position: relative; height:150px; width:100%">
+                                            <canvas></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
-                        <div class="col-md-4 text-white">
-                            <h3 class="bg-primary p-5 text-center">Waiting Payment: $0.00</h3>
+                        <div class="col-12 text-white mt-1">
+                            <div class="chart-container bg-primary" style="position: relative; height:20vh; width:100%">
+                                <canvas id="daily-earnings-chart"></canvas>
+                            </div>
                         </div>
 
-                        <div class="col-md-4 text-white">
-                            <h3 class="bg-primary p-5 text-center">Avail To Transfer: $0.00</h3>
+
+                        <div class="col-4 text-white mt-1">
+                            <div class="bg-primary container">
+                                <div class="row">
+                                    <div class="col-12">
+                                        <small>Pending</small>
+                                        <h3 class="p-4 text-center">$0.00</h3>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-4 text-white mt-1">
+                            <div class="bg-primary container">
+                                <div class="row">
+                                    <div class="col-12">
+                                        <small>Approved Awaiting Payment</small>
+                                        <h3 class="p-4 text-center">$0.00</h3>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-4 text-white mt-1">
+                            <div class="bg-primary container">
+                                <div class="row">
+                                    <div class="col-12">
+                                        <small>Available To Transfer</small>
+                                        <h3 class="p-4 text-center">$0.00</h3>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
