@@ -66,7 +66,8 @@
                                 <div class="row">
                                     <div class="col-6">
                                         <small>Today</small>
-                                        <h3 class="p-4 text-center">Loading...</h3>
+                                        <div class="h1 p-1 text-center mt-2 mb-1">Loading...</div>
+                                        <div class="h6"></div>
                                     </div>
                                     <div class="col-6">
                                         <div class="chart-container" style="position: relative; height:150px; width:100%">
@@ -82,7 +83,8 @@
                                 <div class="row">
                                     <div class="col-6">
                                         <small>This Week</small>
-                                        <h3 class="p-4 text-center">Loading...</h3>
+                                        <div class="h1 p-1 text-center mt-2 mb-1">Loading...</div>
+                                        <div class="h6"></div>
                                     </div>
                                     <div class="col-6">
                                         <div class="chart-container" style="position: relative; height:150px; width:100%">
@@ -98,7 +100,8 @@
                                 <div class="row">
                                     <div class="col-6">
                                         <small>This Month</small>
-                                        <h3 class="p-4 text-center">Loading...</h3>
+                                        <div class="h1 p-1 text-center mt-2 mb-1">Loading...</div>
+                                        <div class="h6"></div>
                                     </div>
                                     <div class="col-6">
                                         <div class="chart-container" style="position: relative; height:150px; width:100%">
@@ -109,272 +112,279 @@
                             </div>
                         </div>
 
-                        <div class="col-8 text-white mt-1">
+                        <div class="col-8 text-white mt-1" hidden>
                             <div class="chart-container bg-primary" style="position: relative; height:150px; width:100%">
                                 <canvas id="daily-earnings-chart"></canvas>
                             </div>
                         </div>
 
-                        <div class="col-4 text-white mt-1">
+                        <div class="col-4 text-white mt-1" hidden>
                             <div class="chart-container bg-primary" style="position: relative; height:150px; width:100%">
                                 <canvas id="daily-earnings-spread"></canvas>
                             </div>
                         </div>
 
                         <div class="col-4 text-white mt-1">
-                            <div class="bg-primary container">
+                            <div class="btn btn-primary container">
                                 <div class="row">
                                     <div class="col-12">
                                         <small>Pending</small>
-                                        <h3 class="p-4 text-center">$0.00</h3>
+                                        <div class="container">
+                                            <div class="row" id="overview-pending">
+                                                <div class="col-12">
+                                                    <h3 class="p-4 text-center">Loading...</h3>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
                         <div class="col-4 text-white mt-1">
-                            <div class="bg-primary container">
-                                <div class="row">
+                            <div class="btn btn-primary container">
+                                <small>Approved Awaiting Payment</small>
+                                <div class="row" id="overview-awaiting">
                                     <div class="col-12">
-                                        <small>Approved Awaiting Payment</small>
-                                        <h3 class="p-4 text-center">$0.00</h3>
+                                        <h3 class="p-4 text-center">Loading...</h3>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
                         <div class="col-4 text-white mt-1">
-                            <div class="bg-primary container">
-                                <div class="row">
-                                    <div class="col-12">
-                                        <small>Available To Transfer</small>
-                                        <h3 class="p-4 text-center">$0.00</h3>
+                            <a class="btn btn-primary container" href="https://worker.mturk.com/earnings" target="_blank">
+                                <small>Available For Transfer</small>
+                                <div class="container">
+                                    <div class="row" id="overview-transfer">
+                                        <div class="col-12">
+                                            <h3 class="p-4 text-center">Loading...</h3>
+                                        </div>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+
+                        <div class="row" hidden>
+                            <div class="col-md-6">
+                                <h3 class="text-center text-primary">Today's Overview</h3>
+                                <table class="table table-striped table-bordered table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th></th>
+                                            <th class="text-center">HITs</th>
+                                            <th class="text-center">Reward</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>Today's
+                                                <u>Assigned</u> HITs</td>
+                                            <td id="assigned-count" class="text-center">-</td>
+                                            <td id="assigned-value" class="text-center">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Today's
+                                                <u>Submitted</u> HITs</td>
+                                            <td id="submitted-count" class="text-center">-</td>
+                                            <td id="submitted-value" class="text-center">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Today's
+                                                <u>Approved</u> HITs</td>
+                                            <td id="approved-count" class="text-center">-</td>
+                                            <td id="approved-value" class="text-center">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Today's
+                                                <u>Rejected</u> HITs</td>
+                                            <td id="rejected-count" class="text-center">-</td>
+                                            <td id="rejected-value" class="text-center">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Today's
+                                                <u>Pending</u> HITs</td>
+                                            <td id="pending-count" class="text-center">-</td>
+                                            <td id="pending-value" class="text-center">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Today's
+                                                <u>Returned</u> HITs</td>
+                                            <td id="returned-count" class="text-center">-</td>
+                                            <td id="returned-value" class="text-center">-</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="col-md-6">
+                                <h3 class="text-center text-primary">Tracker Overview</h3>
+                                <table class="table table-striped table-bordered table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th></th>
+                                            <th class="text-center">HITs</th>
+                                            <th class="text-center">Reward</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>Projected Earnings Today</td>
+                                            <td id="tracker-projected-today-count" class="text-center">-</td>
+                                            <td id="tracker-projected-today-value" class="text-center">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Projected Earnings
+                                                <span id="which-week">This</span> Week</td>
+                                            <td id="tracker-projected-week-count" class="text-center">-</td>
+                                            <td id="tracker-projected-week-value" class="text-center">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Projected Earnings This Month</td>
+                                            <td id="tracker-projected-month-count" class="text-center">-</td>
+                                            <td id="tracker-projected-month-value" class="text-center">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td>&nbsp;</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Pending Earnings</td>
+                                            <td id="tracker-pending-count" class="text-center">-</td>
+                                            <td id="tracker-pending-value" class="text-center">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Approved Waiting Payment</td>
+                                            <td id="tracker-approved-count" class="text-center">-</td>
+                                            <td id="tracker-approved-value" class="text-center">-</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <table class="table table-striped table-bordered table-sm" hidden>
+                            <thead>
+                                <tr>
+                                    <th>Requester</th>
+                                    <th>HITs</th>
+                                    <th>Reward</th>
+                                </tr>
+                            </thead>
+                            <tbody id="requester-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="tab-pane" id="history" role="tabpanel">
+                    <div class="container-fluid">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="container-fluid">
+                                    <div class="row">
+                                        <div class="text-center">
+                                            <button id="requester-overview" type="button" class="btn btn-primary">Requester Overview</button>
+                                            <button id="daily-overview" type="button" class="btn btn-primary">Daily Overview</button>
+                                        </div>
+                                    </div>
+                                    <div class="row mt-3">
+                                        <div class="input-group">
+                                            <div class="input-group-prepend">
+                                                <span class="btn">View</span>
+                                            </div>
+                                            <select id="view" class="custom-select">
+                                                <option value="" selected>All</option>
+                                                <option value="Submitted">Pending</option>
+                                                <option value="Approved">Approved</option>
+                                                <option value="Rejected">Rejected</option>
+                                                <option value="Paid">Paid</option>
+                                            </select>
+                                            <div class="input-group-prepend">
+                                                <span class="btn">HITs that</span>
+                                            </div>
+                                            <select id="matching-type" class="custom-select">
+                                                <option value="contain" selected>Contain</option>
+                                                <option value="exactly">Exactly Match</option>
+
+                                            </select>
+                                            <input id="matching" type="text" class="form-control" placeholder="Leave Blank for All / Requester Name or ID / HIT Title">
+                                            <div class="input-group-append">
+                                                <button class="btn btn-primary" type="button" id="search">Search</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row mt-3">
+                                        <div class="input-group">
+                                            <div class="input-group-prepend">
+                                                <span class="btn">From</span>
+                                            </div>
+                                            <input id="date-from" type="date" class="form-control">
+                                            <div class="input-group-prepend">
+                                                <span class="btn">To</span>
+                                            </div>
+                                            <input id="date-to" type="date" class="form-control">
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
+                        <table class="table table-striped table-bordered table-sm">
+                            <tbody id="history-results"></tbody>
+                        </table>
                     </div>
+                </div>
+            </div>
+        </div>
 
-                    <div class="row" hidden>
-                        <div class="col-md-6">
-                            <h3 class="text-center text-primary">Today's Overview</h3>
-                            <table class="table table-striped table-bordered table-sm">
-                                <thead>
-                                    <tr>
-                                        <th></th>
-                                        <th class="text-center">HITs</th>
-                                        <th class="text-center">Reward</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>Today's
-                                            <u>Assigned</u> HITs</td>
-                                        <td id="assigned-count" class="text-center">-</td>
-                                        <td id="assigned-value" class="text-center">-</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Today's
-                                            <u>Submitted</u> HITs</td>
-                                        <td id="submitted-count" class="text-center">-</td>
-                                        <td id="submitted-value" class="text-center">-</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Today's
-                                            <u>Approved</u> HITs</td>
-                                        <td id="approved-count" class="text-center">-</td>
-                                        <td id="approved-value" class="text-center">-</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Today's
-                                            <u>Rejected</u> HITs</td>
-                                        <td id="rejected-count" class="text-center">-</td>
-                                        <td id="rejected-value" class="text-center">-</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Today's
-                                            <u>Pending</u> HITs</td>
-                                        <td id="pending-count" class="text-center">-</td>
-                                        <td id="pending-value" class="text-center">-</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Today's
-                                            <u>Returned</u> HITs</td>
-                                        <td id="returned-count" class="text-center">-</td>
-                                        <td id="returned-value" class="text-center">-</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="col-md-6">
-                            <h3 class="text-center text-primary">Tracker Overview</h3>
-                            <table class="table table-striped table-bordered table-sm">
-                                <thead>
-                                    <tr>
-                                        <th></th>
-                                        <th class="text-center">HITs</th>
-                                        <th class="text-center">Reward</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>Projected Earnings Today</td>
-                                        <td id="tracker-projected-today-count" class="text-center">-</td>
-                                        <td id="tracker-projected-today-value" class="text-center">-</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Projected Earnings
-                                            <span id="which-week">This</span> Week</td>
-                                        <td id="tracker-projected-week-count" class="text-center">-</td>
-                                        <td id="tracker-projected-week-value" class="text-center">-</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Projected Earnings This Month</td>
-                                        <td id="tracker-projected-month-count" class="text-center">-</td>
-                                        <td id="tracker-projected-month-value" class="text-center">-</td>
-                                    </tr>
-                                    <tr>
-                                        <td>&nbsp;</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Pending Earnings</td>
-                                        <td id="tracker-pending-count" class="text-center">-</td>
-                                        <td id="tracker-pending-value" class="text-center">-</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Approved Waiting Payment</td>
-                                        <td id="tracker-approved-count" class="text-center">-</td>
-                                        <td id="tracker-approved-value" class="text-center">-</td>
-                                    </tr>
-                                </tbody>
-                            </table>
+        <div id="sync-modal" class="modal">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <b class="col-4">Syncing</b>
+                        <span id=sync-date></span>
+                    </div>
+                    <div class="modal-body">
+                        <div class="container">
+                            <span id="sync-message"></span>
                         </div>
                     </div>
-
-                    <table class="table table-striped table-bordered table-sm" hidden>
-                        <thead>
-                            <tr>
-                                <th>Requester</th>
-                                <th>HITs</th>
-                                <th>Reward</th>
-                            </tr>
-                        </thead>
-                        <tbody id="requester-tbody"></tbody>
-                    </table>
+                    <div class="modal-footer">
+                        <button id="sync-cancel" class="btn btn-danger" disabled>Cancel</button>
+                    </div>
                 </div>
             </div>
+        </div>
 
-            <div class="tab-pane" id="history" role="tabpanel">
-                <div class="container-fluid">
-                    <div class="card">
-                        <div class="card-body">
-                            <div class="container-fluid">
-                                <div class="row">
-                                    <div class="text-center">
-                                        <button id="requester-overview" type="button" class="btn btn-primary">Requester Overview</button>
-                                        <button id="daily-overview" type="button" class="btn btn-primary">Daily Overview</button>
-                                    </div>
-                                </div>
-                                <div class="row mt-3">
-                                    <div class="input-group">
-                                        <div class="input-group-prepend">
-                                            <span class="btn">View</span>
-                                        </div>
-                                        <select id="view" class="custom-select">
-                                            <option value="" selected>All</option>
-                                            <option value="Submitted">Pending</option>
-                                            <option value="Approved">Approved</option>
-                                            <option value="Rejected">Rejected</option>
-                                            <option value="Paid">Paid</option>
-                                        </select>
-                                        <div class="input-group-prepend">
-                                            <span class="btn">HITs that</span>
-                                        </div>
-                                        <select id="matching-type" class="custom-select">
-                                            <option value="contain" selected>Contain</option>
-                                            <option value="exactly">Exactly Match</option>
-
-                                        </select>
-                                        <input id="matching" type="text" class="form-control" placeholder="Leave Blank for All / Requester Name or ID / HIT Title">
-                                        <div class="input-group-append">
-                                            <button class="btn btn-primary" type="button" id="search">Search</button>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="row mt-3">
-                                    <div class="input-group">
-                                        <div class="input-group-prepend">
-                                            <span class="btn">From</span>
-                                        </div>
-                                        <input id="date-from" type="date" class="form-control">
-                                        <div class="input-group-prepend">
-                                            <span class="btn">To</span>
-                                        </div>
-                                        <input id="date-to" type="date" class="form-control">
-                                    </div>
-                                </div>
-                            </div>
+        <div id="searching-modal" class="modal">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <b class="col-4">Searching</b>
+                    </div>
+                    <div class="modal-body">
+                        <div class="container">
+                            <span id="searching-message">This may take some time</span>
                         </div>
                     </div>
-                    <table class="table table-striped table-bordered table-sm">
-                        <tbody id="history-results"></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="sync-modal" class="modal">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <b class="col-4">Syncing</b>
-                    <span id=sync-date></span>
-                </div>
-                <div class="modal-body">
-                    <div class="container">
-                        <span id="sync-message"></span>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button id="sync-cancel" class="btn btn-danger" disabled>Cancel</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="searching-modal" class="modal">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <b class="col-4">Searching</b>
-                </div>
-                <div class="modal-body">
-                    <div class="container">
-                        <span id="searching-message">This may take some time</span>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button id="sync-cancel" class="btn btn-danger" disabled>Cancel</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="status-modal" class="modal">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <b id="status-header" class="col-4"></b>
-                </div>
-                <div class="modal-body">
-                    <div class="container">
-                        <span id="status-message"></span>
+                    <div class="modal-footer">
+                        <button id="sync-cancel" class="btn btn-danger" disabled>Cancel</button>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
+
+        <div id="status-modal" class="modal">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <b id="status-header" class="col-4"></b>
+                    </div>
+                    <div class="modal-body">
+                        <div class="container">
+                            <span id="status-message"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
 </body>
 
 <script src="/hit_tracker/hit_tracker.js"></script>

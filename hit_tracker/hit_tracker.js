@@ -1816,81 +1816,6 @@ function chart(worked) {
   });
 }
 
-function createBarChart(card, groups) {
-  const reduced = Object.keys(groups).reduce(
-    (acc, cV) => {
-      if (groups[cV].count > 1) acc.batches += groups[cV].value;
-      else acc.surveys += groups[cV].value;
-      acc.total += groups[cV].value;
-      return acc;
-    },
-    { surveys: 0, batches: 0, total: 0 }
-  );
-
-  console.log(
-    `surveys ${reduced.surveys.toFixed(2)}`,
-    `batches ${reduced.batches.toFixed(2)}`
-  );
-
-  const data = {
-    datasets: [
-      {
-        data: [reduced.surveys.toFixed(2), reduced.batches.toFixed(2)],
-        backgroundColor: [`#6c757d`, `#343a40`]
-      }
-    ],
-
-    labels: ["Surveys", "Batches"]
-  };
-
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    legend: {
-      display: false
-    },
-    scales: {
-      xAxes: [
-        {
-          gridLines: {
-            color: `#FFFFFF`
-            // display: false,
-          },
-          ticks: {
-            fontColor: `#FFFFFF` // this here
-          }
-        }
-      ],
-      yAxes: [
-        {
-          // display: false,
-          gridLines: {
-            color: `#FFFFFF`
-            // display: false,
-          },
-          ticks: {
-            fontColor: `#FFFFFF` // this here
-          }
-        }
-      ]
-    },
-    tooltips: {
-      position: "average",
-      intersect: false
-    }
-  };
-
-  // eslint-disable-next-line
-  new Chart(card.querySelector(`canvas`).getContext(`2d`), {
-    type: "bar",
-    data,
-    options
-  });
-
-  // eslint-disable-next-line
-  card.querySelector(`h3`).textContent = `$${reduced.total.toFixed(2)}`;
-}
-
 function createDoughnutChart(card, groups) {
   const reduced = Object.keys(groups).reduce(
     (acc, cV) => {
@@ -1936,8 +1861,12 @@ function createDoughnutChart(card, groups) {
     options
   });
 
+  console.log(card, card.querySelector(`.text-muted`));
   // eslint-disable-next-line
-  card.querySelector(`h3`).textContent = `$${reduced.total.toFixed(2)}`;
+  card.querySelector(`.h1`).textContent = `$${reduced.total.toFixed(2)}`;
+
+  // eslint-disable-next-line
+  card.querySelector(`.h6`).textContent = `$${(0).toFixed(2)}/hr`;
 }
 
 function createSpreadChart(spread) {
@@ -2013,76 +1942,10 @@ function createSpreadChart(spread) {
     options
   });
 }
-/*
-function createSpreadChart(spread) {
-  const scaled = Object.keys(spread).reduce((acc, cV) => {
-    const scale = Math.round(spread[cV] / spread.total * 10);
-    acc[cV] = scale > 0 ? scale : 1;
-    return acc;
-  }, {});
-
-  const data = {
-    labels: [
-      `$0.00 - $0.04`,
-      `$0.05 - $0.09`,
-      `$0.10 - $0.19`,
-      `$0.20 - $0.49`,
-      `$0.50 - $0.99`,
-      `$1.00+`
-    ],
-    datasets: [
-      {
-        label: `HITs This Month`,
-        data: [
-          scaled[`0-4`],
-          scaled[`5-9`],
-          scaled[`10-19`],
-          scaled[`20-49`],
-          scaled[`50-99`],
-          scaled[`100+`]
-        ],
-        backgroundColor: "#6c757d",
-        borderColor: "#343a40"
-      }
-    ]
-  };
-
-  console.log(`radar data`, data);
-
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    scale: {
-      gridLines: { color: "white" },
-      angleLines: { color: "white" },
-      pointLabels: { fontColor: "white" },
-      ticks: {
-        display: false,
-        maxTicksLimit: 3
-      }
-    },
-    legend: {
-      position: `left`,
-      labels: {
-        fontColor: "white"
-      }
-    },
-    tooltips: {
-      intersect: false
-    }
-  };
-
-  // eslint-disable-next-line
-  new Chart(document.getElementById(`daily-earnings-spread`).getContext(`2d`), {
-    type: "radar",
-    data,
-    options
-  });
-}
-*/
 
 async function overviewToday() {
-  const transaction = hitTrackerDB.transaction([`hit`], `readonly`);
+  const db = await openDatabase(`hitTrackerDB`, 1);
+  const transaction = db.transaction([`hit`], `readonly`);
   const objectStore = transaction.objectStore(`hit`);
   const today = mturkDate();
   const range = IDBKeyRange.only(today);
@@ -2160,10 +2023,11 @@ async function overviewToday() {
   };
 }
 
-setTimeout(overviewToday, 100);
+overviewToday();
 
 async function overviewWeek() {
-  const transaction = hitTrackerDB.transaction([`hit`], `readonly`);
+  const db = await openDatabase(`hitTrackerDB`, 1);
+  const transaction = db.transaction([`hit`], `readonly`);
   const objectStore = transaction.objectStore(`hit`);
   const week = getWeekKludge();
   const range = IDBKeyRange.bound(week.start, week.end);
@@ -2201,10 +2065,11 @@ async function overviewWeek() {
   };
 }
 
-setTimeout(overviewWeek, 100);
+overviewWeek();
 
 async function overviewMonth() {
-  const transaction = hitTrackerDB.transaction([`hit`], `readonly`);
+  const db = await openDatabase(`hitTrackerDB`, 1);
+  const transaction = db.transaction([`hit`], `readonly`);
   const objectStore = transaction.objectStore(`hit`);
   const month = getMonth();
   const range = IDBKeyRange.bound(month.start, month.end);
@@ -2262,95 +2127,90 @@ async function overviewMonth() {
   };
 }
 
-setTimeout(overviewMonth, 100);
+overviewMonth();
 
-function trackerOverviewDatadd() {
-  const promiseData = {
-    week: { count: 0, value: 0 },
-    month: { count: 0, value: 0 },
-    pending: { count: 0, value: 0 },
-    approved: { count: 0, value: 0 },
-    days: {}
+async function overviewPending() {
+  const db = await openDatabase(`hitTrackerDB`, 1);
+  const transaction = db.transaction([`hit`], `readonly`);
+  const objectStore = transaction.objectStore(`hit`);
+  const range = IDBKeyRange.only(`Submitted`);
+
+  let count = 0;
+  let value = 0;
+
+  objectStore.index(`state`).openCursor(range).onsuccess = event => {
+    const cursor = event.target.result;
+
+    if (cursor) {
+      count += 1;
+      value += cursor.value.reward.amount_in_dollars;
+      cursor.continue();
+    }
   };
 
-  return new Promise(resolve => {
-    const transaction = hitTrackerDB.transaction([`hit`], `readonly`);
-    const objectStore = transaction.objectStore(`hit`);
-    const week = getWeekKludge();
-    const month = getMonth();
+  transaction.oncomplete = () => {
+    const money = `$${value.toFixed(2)}`;
 
-    if (week.day === 0)
-      document.getElementById(`which-week`).textContent = `Last`;
-
-    // pending week
-    objectStore
-      .index(`date`)
-      .openCursor(
-        window.IDBKeyRange.bound(week.start, week.end)
-      ).onsuccess = event => {
-      const cursor = event.target.result;
-
-      if (cursor) {
-        if (cursor.value.state.match(/Submitted|Pending|Approved|Paid/)) {
-          promiseData.week.count++;
-          promiseData.week.value += cursor.value.reward.amount_in_dollars;
-        }
-        cursor.continue();
-      }
-    };
-
-    // pending month
-    objectStore
-      .index(`date`)
-      .openCursor(
-        window.IDBKeyRange.bound(month.start, month.end)
-      ).onsuccess = event => {
-      const cursor = event.target.result;
-
-      if (cursor) {
-        if (cursor.value.state.match(/Submitted|Pending|Approved|Paid/)) {
-          promiseData.month.count += 1;
-          promiseData.month.value += cursor.value.reward.amount_in_dollars;
-
-          const day = cursor.value.date.slice(-2);
-          if (promiseData.days[day]) {
-            promiseData.days[day] += cursor.value.reward.amount_in_dollars;
-          } else {
-            promiseData.days[day] = cursor.value.reward.amount_in_dollars;
-          }
-        }
-        cursor.continue();
-      }
-    };
-
-    // submitted pending approval or rejection
-    objectStore
-      .index(`state`)
-      .openCursor(window.IDBKeyRange.only(`Submitted`)).onsuccess = event => {
-      const cursor = event.target.result;
-
-      if (cursor) {
-        promiseData.pending.count++;
-        promiseData.pending.value += cursor.value.reward.amount_in_dollars;
-        cursor.continue();
-      }
-    };
-
-    // approved waiting payment
-    objectStore
-      .index(`state`)
-      .openCursor(window.IDBKeyRange.only(`Approved`)).onsuccess = event => {
-      const cursor = event.target.result;
-
-      if (cursor) {
-        promiseData.approved.count++;
-        promiseData.approved.value += cursor.value.reward.amount_in_dollars;
-        cursor.continue();
-      }
-    };
-
-    transaction.oncomplete = event => {
-      resolve(promiseData);
-    };
-  });
+    document.getElementById(`overview-pending`).innerHTML = `<div class="col-6">
+        <h3 class="p-4 text-center">${money}</h3>
+      </div>
+      <div class="col-6">
+        <h3 class="p-4 text-center">${count}</h3>
+      </div>`;
+  };
 }
+
+overviewPending();
+
+async function overviewAwaiting() {
+  const db = await openDatabase(`hitTrackerDB`, 1);
+  const transaction = db.transaction([`hit`], `readonly`);
+  const objectStore = transaction.objectStore(`hit`);
+  const range = IDBKeyRange.only(`Approved`);
+
+  let count = 0;
+  let value = 0;
+
+  objectStore.index(`state`).openCursor(range).onsuccess = event => {
+    const cursor = event.target.result;
+
+    if (cursor) {
+      count += 1;
+      value += cursor.value.reward.amount_in_dollars;
+      cursor.continue();
+    }
+  };
+
+  transaction.oncomplete = () => {
+    const money = `$${value.toFixed(2)}`;
+
+    document.getElementById(
+      `overview-awaiting`
+    ).innerHTML = `<div class="col-6">
+        <h3 class="p-4 text-center">${money}</h3>
+      </div>
+      <div class="col-6">
+        <h3 class="p-4 text-center">${count}</h3>
+      </div>`;
+  };
+}
+
+overviewAwaiting();
+
+async function overviewTransfer() {
+  const response = await fetch(
+    `https://worker.mturk.com/dashboard?format=json`,
+    {
+      credentials: `include`
+    }
+  );
+
+  const { available_earnings } = await response.json();
+  const money = `$${available_earnings.amount_in_dollars.toFixed(2)}`;
+
+  document.getElementById(`overview-transfer`).innerHTML = `<div class="col-12">
+      <h3 class="p-4 text-center">${money}</h3>
+    </div>`;
+}
+
+overviewTransfer();
