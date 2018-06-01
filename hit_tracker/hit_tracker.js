@@ -1827,11 +1827,6 @@ function createDoughnutChart(card, groups) {
     { surveys: 0, batches: 0, total: 0 }
   );
 
-  console.log(
-    `surveys ${reduced.surveys.toFixed(2)}`,
-    `batches ${reduced.batches.toFixed(2)}`
-  );
-
   const data = {
     datasets: [
       {
@@ -1861,7 +1856,6 @@ function createDoughnutChart(card, groups) {
     options
   });
 
-  console.log(card, card.querySelector(`.text-muted`));
   // eslint-disable-next-line
   card.querySelector(`.h1`).textContent = `$${reduced.total.toFixed(2)}`;
 
@@ -1943,191 +1937,201 @@ function createSpreadChart(spread) {
   });
 }
 
+function getOverview(range) {
+  return new Promise(async resolve => {
+    const db = await openDatabase(`hitTrackerDB`, 1);
+    const transaction = db.transaction([`hit`], `readonly`);
+    const objectStore = transaction.objectStore(`hit`);
+
+    const days = {};
+    const assigned = { count: 0, value: 0 };
+    const submitted = { count: 0, value: 0 };
+    const approved = { count: 0, value: 0 };
+    const rejected = { count: 0, value: 0 };
+    const pending = { count: 0, value: 0 };
+    const returned = { count: 0, value: 0 };
+    const total = { count: 0, value: 0 };
+    const groups = {};
+    const requesters = {};
+    const rewards = {
+      "0-4": 0,
+      "5-9": 0,
+      "10-19": 0,
+      "20-49": 0,
+      "50-99": 0,
+      "100+": 0
+    };
+
+    objectStore.index(`date`).openCursor(range).onsuccess = event => {
+      const cursor = event.target.result;
+
+      if (cursor) {
+        const hit = cursor.value;
+        const { state, reward, requester_id, requester_name, title } = hit;
+        const { amount_in_dollars } = reward;
+
+        const day = hit.date.slice(-2);
+        days[day] = days[day]
+          ? days[day] + amount_in_dollars
+          : amount_in_dollars;
+
+        total.count += 1;
+        total.value += amount_in_dollars;
+
+        if (state.match(/Submitted|Pending|Approved|Paid/)) {
+          submitted.count += 1;
+          submitted.value += amount_in_dollars;
+
+          if (state.match(/Approved|Paid/)) {
+            approved.count += 1;
+            approved.value += amount_in_dollars;
+          } else if (state.match(/Submitted|Pending/)) {
+            pending.count += 1;
+            pending.value += amount_in_dollars;
+          }
+
+          if (!requesters[requester_id]) {
+            requesters[requester_id] = {
+              id: requester_id,
+              name: hit.requester_name,
+              count: 1,
+              value: amount_in_dollars
+            };
+          } else {
+            requesters[requester_id].count += 1;
+            requesters[requester_id].value += amount_in_dollars;
+          }
+
+          const groupKey = requester_name + title + amount_in_dollars;
+
+          if (!groups[groupKey]) {
+            groups[groupKey] = {
+              count: 1,
+              value: amount_in_dollars
+            };
+          } else {
+            groups[groupKey].count += 1;
+            groups[groupKey].value += amount_in_dollars;
+          }
+
+          if (amount_in_dollars > 1.0) {
+            rewards[`100+`] += 1;
+          } else if (amount_in_dollars > 0.5) {
+            rewards[`50-99`] += 1;
+          } else if (amount_in_dollars > 0.2) {
+            rewards[`20-49`] += 1;
+          } else if (amount_in_dollars > 0.1) {
+            rewards[`10-19`] += 1;
+          } else if (amount_in_dollars > 0.05) {
+            rewards[`5-9`] += 1;
+          } else {
+            rewards[`0-4`] += 1;
+          }
+        } else if (state.match(/Returned/)) {
+          returned.count += 1;
+          returned.value += amount_in_dollars;
+        } else if (state.match(/Rejected/)) {
+          rejected.count += 1;
+          rejected.value += amount_in_dollars;
+        }
+
+        assigned.count += 1;
+        assigned.value += reward;
+
+        cursor.continue();
+      }
+    };
+
+    transaction.oncomplete = () => {
+      resolve({
+        days,
+        groups,
+        rewards,
+        requesters,
+        counts: {
+          assigned,
+          submitted,
+          approved,
+          rejected,
+          pending,
+          returned
+        }
+      });
+    };
+  });
+}
+
+function createRequesterTable(card, requesters) {
+  const sorted = Object.keys(requesters).sort(
+    (a, b) => requesters[a].value - requesters[b].value
+  );
+
+  const trs = sorted
+    .map(key => {
+      const { id, name, count, value } = requesters[key];
+      return HTML`<tr>
+      <td>
+        <a href="https://worker.mturk.com/requesters/${id}/projects" target="_blank">${name}</a>
+      </td>
+      <td>${count}</td>
+      <td>$${value.toFixed(2)}</td>
+    </tr>
+    `;
+    })
+    .join(``);
+
+  card.querySelector(`requesters`).insertAdjacentHTML(
+    `afterbegin`,
+    `<table class="table table-striped table-bordered table-sm text-white" style="background-color: #343a40;">
+    <thead>
+      <tr>
+        <th>Requester</th>
+        <th>HITs</th>
+        <th>Reward</th>
+      </tr>
+    </thead>
+    <thead>
+      ${trs}
+    </thead>
+  </table>`
+  );
+}
+
 async function overviewToday() {
-  const db = await openDatabase(`hitTrackerDB`, 1);
-  const transaction = db.transaction([`hit`], `readonly`);
-  const objectStore = transaction.objectStore(`hit`);
   const today = mturkDate();
   const range = IDBKeyRange.only(today);
+  const overview = await getOverview(range);
+  const { hits, groups, rewards, requesters } = overview;
+  console.log(`overviewToday`, overview);
 
-  const assigned = { count: 0, value: 0 };
-  const submitted = { count: 0, value: 0 };
-  const approved = { count: 0, value: 0 };
-  const rejected = { count: 0, value: 0 };
-  const pending = { count: 0, value: 0 };
-  const returned = { count: 0, value: 0 };
-  const groups = {};
-  const requesters = {};
-
-  objectStore.index(`date`).openCursor(range).onsuccess = event => {
-    const cursor = event.target.result;
-
-    if (cursor) {
-      const hit = cursor.value;
-      const { state, reward, requester_id, requester_name, title } = hit;
-      const { amount_in_dollars } = reward;
-
-      if (state.match(/Submitted|Pending|Approved|Paid/)) {
-        submitted.count += 1;
-        submitted.value += amount_in_dollars;
-
-        if (state.match(/Approved|Paid/)) {
-          approved.count += 1;
-          approved.value += amount_in_dollars;
-        } else if (state.match(/Submitted|Pending/)) {
-          pending.count += 1;
-          pending.value += amount_in_dollars;
-        }
-
-        if (!requesters[requester_id]) {
-          requesters[requester_id] = {
-            id: requester_id,
-            name: hit.requester_name,
-            count: 1,
-            value: amount_in_dollars
-          };
-        } else {
-          requesters[requester_id].count += 1;
-          requesters[requester_id].value += amount_in_dollars;
-        }
-
-        const groupKey = requester_name + title + amount_in_dollars;
-
-        if (!groups[groupKey]) {
-          groups[groupKey] = {
-            count: 1,
-            value: amount_in_dollars
-          };
-        } else {
-          groups[groupKey].count += 1;
-          groups[groupKey].value += amount_in_dollars;
-        }
-      } else if (state.match(/Returned/)) {
-        returned.count += 1;
-        returned.value += amount_in_dollars;
-      } else if (state.match(/Rejected/)) {
-        rejected.count += 1;
-        rejected.value += amount_in_dollars;
-      }
-
-      assigned.count += 1;
-      assigned.value += reward;
-
-      cursor.continue();
-    }
-  };
-
-  transaction.oncomplete = () => {
-    const card = document.getElementById(`overview-today`);
-    createDoughnutChart(card, groups);
-  };
+  const card = document.getElementById(`overview-today`);
+  createDoughnutChart(card, groups);
+  createRequesterTable(card, requesters);
 }
-
-overviewToday();
 
 async function overviewWeek() {
-  const db = await openDatabase(`hitTrackerDB`, 1);
-  const transaction = db.transaction([`hit`], `readonly`);
-  const objectStore = transaction.objectStore(`hit`);
   const week = getWeekKludge();
   const range = IDBKeyRange.bound(week.start, week.end);
+  const overview = await getOverview(range);
+  const { hits, groups, rewards, requesters } = overview;
+  console.log(`overviewWeek`, overview);
 
-  const groups = {};
-
-  objectStore.index(`date`).openCursor(range).onsuccess = event => {
-    const cursor = event.target.result;
-
-    if (cursor) {
-      const hit = cursor.value;
-      const { state, reward, requester_name, title } = hit;
-      const { amount_in_dollars } = reward;
-
-      if (state.match(/Submitted|Pending|Approved|Paid/)) {
-        const groupKey = requester_name + title + amount_in_dollars;
-
-        if (!groups[groupKey]) {
-          groups[groupKey] = {
-            count: 1,
-            value: amount_in_dollars
-          };
-        } else {
-          groups[groupKey].count += 1;
-          groups[groupKey].value += amount_in_dollars;
-        }
-      }
-      cursor.continue();
-    }
-  };
-
-  transaction.oncomplete = () => {
-    const card = document.getElementById(`overview-week`);
-    createDoughnutChart(card, groups);
-  };
+  const card = document.getElementById(`overview-week`);
+  createDoughnutChart(card, groups);
+  createRequesterTable(card, requesters);
 }
-
-overviewWeek();
 
 async function overviewMonth() {
-  const db = await openDatabase(`hitTrackerDB`, 1);
-  const transaction = db.transaction([`hit`], `readonly`);
-  const objectStore = transaction.objectStore(`hit`);
   const month = getMonth();
   const range = IDBKeyRange.bound(month.start, month.end);
+  const overview = await getOverview(range);
+  const { hits, groups, rewards, requesters } = overview;
+  console.log(`overviewMonth`, overview);
 
-  const groups = {};
-  const spread = {
-    "0-4": 0,
-    "5-9": 0,
-    "10-19": 0,
-    "20-49": 0,
-    "50-99": 0,
-    "100+": 0,
-    total: 0
-  };
-
-  objectStore.index(`date`).openCursor(range).onsuccess = event => {
-    const cursor = event.target.result;
-
-    if (cursor) {
-      const hit = cursor.value;
-      const { state, reward, requester_name, title } = hit;
-      const { amount_in_dollars } = reward;
-
-      if (state.match(/Submitted|Pending|Approved|Paid/)) {
-        const groupKey = requester_name + title + amount_in_dollars;
-
-        if (!groups[groupKey]) {
-          groups[groupKey] = {
-            count: 1,
-            value: amount_in_dollars
-          };
-        } else {
-          groups[groupKey].count += 1;
-          groups[groupKey].value += amount_in_dollars;
-        }
-
-        if (amount_in_dollars > 1.0) spread[`100+`] += 1;
-        else if (amount_in_dollars > 0.5) spread[`50-99`] += 1;
-        else if (amount_in_dollars > 0.2) spread[`20-49`] += 1;
-        else if (amount_in_dollars > 0.1) spread[`10-19`] += 1;
-        else if (amount_in_dollars > 0.05) spread[`5-9`] += 1;
-        else spread[`0-4`] += 1;
-
-        spread.total += 1;
-      }
-
-      cursor.continue();
-    }
-  };
-
-  transaction.oncomplete = () => {
-    const card = document.getElementById(`overview-month`);
-    createDoughnutChart(card, groups);
-    createSpreadChart(spread);
-  };
+  const card = document.getElementById(`overview-month`);
+  createDoughnutChart(card, groups);
+  createRequesterTable(card, requesters);
 }
-
-overviewMonth();
 
 async function overviewPending() {
   const db = await openDatabase(`hitTrackerDB`, 1);
@@ -2159,8 +2163,6 @@ async function overviewPending() {
       </div>`;
   };
 }
-
-overviewPending();
 
 async function overviewAwaiting() {
   const db = await openDatabase(`hitTrackerDB`, 1);
@@ -2195,8 +2197,6 @@ async function overviewAwaiting() {
   };
 }
 
-overviewAwaiting();
-
 async function overviewTransfer() {
   const response = await fetch(
     `https://worker.mturk.com/dashboard?format=json`,
@@ -2213,4 +2213,41 @@ async function overviewTransfer() {
     </div>`;
 }
 
+overviewToday();
+overviewWeek();
+overviewMonth();
+overviewPending();
+overviewAwaiting();
 overviewTransfer();
+
+function returnMonth() {}
+
+[`today`, `week`, `month`].forEach(i =>
+  document
+    .querySelector(`#overview-${i} .btn`)
+    .addEventListener(`click`, event => {
+      const el = event.target.closest(`[id]`);
+      const btn = el.querySelector(`.btn`);
+      const expandable = el.querySelector(`.expandable`);
+
+      if (el.classList.contains(`bg-dark`)) {
+        el.style = ``;
+        el.classList.remove(`bg-dark`);
+        btn.classList.remove(`h-100`);
+        expandable.hidden = true;
+      } else {
+        el.style = `width: 100vw !important; max-width: 10000; z-index: 99999; position: absolute; padding: 0; height: 80vh;`;
+        el.classList.add(`bg-dark`);
+        btn.classList.add(`h-100`);
+        expandable.hidden = false;
+      }
+    })
+);
+/*
+document
+  .getElementById(`overview-today`)
+  .querySelector(`.btn`)
+  .addEventListener(`click`, event => {
+    
+  });
+  */
