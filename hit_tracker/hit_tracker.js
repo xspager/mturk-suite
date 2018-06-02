@@ -20,7 +20,7 @@ function returnWeek() {
 
   const p = s => `0${s}`.slice(-2);
   const offset = n => isPST.getDate() - isPST.getDay() - (n || 0);
-  const yyyymmdd = d => `${d.getFullYear() + p(d.getMonth()) + p(d.getDate())}`;
+  const yyyymmdd = d => `${d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate())}`;
 
   const start = new Date(isPST.setDate(offset(mod)));
   const end = new Date(isPST.setDate(offset() + 6));
@@ -689,9 +689,11 @@ async function search() {
       tr.appendChild(state);
 
       fragment.appendChild(tr);
-      
+
       return cursor.continue();
     }
+
+    return false;
   };
 
   transaction.oncomplete = () => {
