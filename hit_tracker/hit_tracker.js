@@ -1,10 +1,12 @@
-let hitTrackerDB;
-
-(async function initialize() {
-  hitTrackerDB = await openDatabase(`hitTrackerDB`, 1);
-  todaysOverview();
-  trackerOverview();
-})();
+Object.assign(Number.prototype, {
+  random() {
+    return this; //Math.round(Math.random() * 100);
+  },
+  toMoneyString() {
+    // return `$0.00`;
+    return `$${(this.random()).toFixed(2)}`;
+  }
+});
 
 // Opens the specified IndexedDB
 function openDatabase(name, version) {
@@ -1747,10 +1749,57 @@ function daysThisMonth() {
   return result;
 }
 
-function chart(worked) {
-  const ctx = document.getElementById(`daily-earnings-chart`).getContext(`2d`);
-  const days = daysThisMonth();
-  const info = days.map(key => (worked[key] || 0.001).toFixed(2));
+function createDoughnutChart(card, groups) {
+  const reduced = Object.keys(groups).reduce(
+    (acc, cV) => {
+      if (groups[cV].count > 1) acc.batches += groups[cV].value;
+      else acc.surveys += groups[cV].value;
+      acc.total += groups[cV].value;
+      return acc;
+    },
+    { surveys: 0, batches: 0, total: 0 }
+  );
+
+  const data = {
+    datasets: [
+      {
+        data: [reduced.surveys.toFixed(2), reduced.batches.toFixed(2)],
+        backgroundColor: [`#6c757d`, `#343a40`]
+      }
+    ],
+
+    labels: ["Surveys", "Batches"]
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    legend: {
+      labels: {
+        boxWidth: 20,
+        fontColor: "white"
+      }
+    }
+  };
+
+  // eslint-disable-next-line
+  new Chart(card.querySelector(`canvas`).getContext(`2d`), {
+    type: "pie",
+    data,
+    options
+  });
+
+  // eslint-disable-next-line
+  card.querySelector(`.h1`).textContent = `${reduced.total.toMoneyString()}`;
+
+  // eslint-disable-next-line
+  card.querySelector(`.h6`).textContent = `${(0).toMoneyString()}/hr`;
+}
+
+function createLineChart(card, worked) {
+  const ctx = card.querySelector(`days canvas`).getContext(`2d`);
+  const days = Object.keys(worked);
+  const info = days.map(key => (worked[key] || 0.001).random().toFixed(2));
 
   const data = {
     labels: days,
@@ -1814,53 +1863,6 @@ function chart(worked) {
     data,
     options
   });
-}
-
-function createDoughnutChart(card, groups) {
-  const reduced = Object.keys(groups).reduce(
-    (acc, cV) => {
-      if (groups[cV].count > 1) acc.batches += groups[cV].value;
-      else acc.surveys += groups[cV].value;
-      acc.total += groups[cV].value;
-      return acc;
-    },
-    { surveys: 0, batches: 0, total: 0 }
-  );
-
-  const data = {
-    datasets: [
-      {
-        data: [reduced.surveys.toFixed(2), reduced.batches.toFixed(2)],
-        backgroundColor: [`#6c757d`, `#343a40`]
-      }
-    ],
-
-    labels: ["Surveys", "Batches"]
-  };
-
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    legend: {
-      labels: {
-        boxWidth: 20,
-        fontColor: "white"
-      }
-    }
-  };
-
-  // eslint-disable-next-line
-  new Chart(card.querySelector(`canvas`).getContext(`2d`), {
-    type: "pie",
-    data,
-    options
-  });
-
-  // eslint-disable-next-line
-  card.querySelector(`.h1`).textContent = `$${reduced.total.toFixed(2)}`;
-
-  // eslint-disable-next-line
-  card.querySelector(`.h6`).textContent = `$${(0).toFixed(2)}/hr`;
 }
 
 function createSpreadChart(spread) {
@@ -1970,7 +1972,7 @@ function getOverview(range) {
         const { state, reward, requester_id, requester_name, title } = hit;
         const { amount_in_dollars } = reward;
 
-        const day = hit.date.slice(-2);
+        const day = hit.date;
         days[day] = days[day]
           ? days[day] + amount_in_dollars
           : amount_in_dollars;
@@ -2063,37 +2065,36 @@ function getOverview(range) {
 
 function createRequesterTable(card, requesters) {
   const sorted = Object.keys(requesters).sort(
-    (a, b) => requesters[a].value - requesters[b].value
+    (a, b) => requesters[b].value - requesters[a].value
   );
 
   const trs = sorted
     .map(key => {
       const { id, name, count, value } = requesters[key];
       return HTML`<tr>
-      <td>
-        <a href="https://worker.mturk.com/requesters/${id}/projects" target="_blank">${name}</a>
-      </td>
-      <td>${count}</td>
-      <td>$${value.toFixed(2)}</td>
-    </tr>
-    `;
+        <td>
+          <a href="https://worker.mturk.com/requesters/${id}/projects" target="_blank">\${name}</a>
+        </td>
+        <td>${count.random()}</td>
+        <td>${value.toMoneyString()}</td>
+      </tr>`;
     })
     .join(``);
 
   card.querySelector(`requesters`).insertAdjacentHTML(
     `afterbegin`,
-    `<table class="table table-striped table-bordered table-sm text-white" style="background-color: #343a40;">
-    <thead>
-      <tr>
-        <th>Requester</th>
-        <th>HITs</th>
-        <th>Reward</th>
-      </tr>
-    </thead>
-    <thead>
-      ${trs}
-    </thead>
-  </table>`
+    `<table class="table table-striped table-bordered table-sm bg-light text-dark">
+      <thead>
+        <tr>
+          <th>Requester</th>
+          <th>HITs</th>
+          <th>Reward</th>
+        </tr>
+      </thead>
+      <thead>
+        ${trs}
+      </thead>
+    </table>`
   );
 }
 
@@ -2101,36 +2102,34 @@ async function overviewToday() {
   const today = mturkDate();
   const range = IDBKeyRange.only(today);
   const overview = await getOverview(range);
-  const { hits, groups, rewards, requesters } = overview;
-  console.log(`overviewToday`, overview);
 
   const card = document.getElementById(`overview-today`);
-  createDoughnutChart(card, groups);
-  createRequesterTable(card, requesters);
+  createDoughnutChart(card, overview.groups);
+  createRequesterTable(card, overview.requesters);
 }
 
 async function overviewWeek() {
   const week = getWeekKludge();
   const range = IDBKeyRange.bound(week.start, week.end);
   const overview = await getOverview(range);
-  const { hits, groups, rewards, requesters } = overview;
-  console.log(`overviewWeek`, overview);
 
   const card = document.getElementById(`overview-week`);
-  createDoughnutChart(card, groups);
-  createRequesterTable(card, requesters);
+  createDoughnutChart(card, overview.groups);
+  createRequesterTable(card, overview.requesters);
+  createLineChart(card, overview.days);
 }
 
 async function overviewMonth() {
-  const month = getMonth();
+  const card = document.getElementById(`overview-month`);
+  const month = returnMonth();
+  card.querySelector(`small`).textContent = month.which;
+  
   const range = IDBKeyRange.bound(month.start, month.end);
   const overview = await getOverview(range);
-  const { hits, groups, rewards, requesters } = overview;
-  console.log(`overviewMonth`, overview);
 
-  const card = document.getElementById(`overview-month`);
-  createDoughnutChart(card, groups);
-  createRequesterTable(card, requesters);
+  createDoughnutChart(card, overview.groups);
+  createRequesterTable(card, overview.requesters);
+  createLineChart(card, overview.days);
 }
 
 async function overviewPending() {
@@ -2153,13 +2152,11 @@ async function overviewPending() {
   };
 
   transaction.oncomplete = () => {
-    const money = `$${value.toFixed(2)}`;
-
     document.getElementById(`overview-pending`).innerHTML = `<div class="col-6">
-        <h3 class="p-4 text-center">${money}</h3>
+        <h3 class="p-4 text-center">${value.toMoneyString()}</h3>
       </div>
       <div class="col-6">
-        <h3 class="p-4 text-center">${count}</h3>
+        <h3 class="p-4 text-center">${count.random()}</h3>
       </div>`;
   };
 }
@@ -2184,15 +2181,13 @@ async function overviewAwaiting() {
   };
 
   transaction.oncomplete = () => {
-    const money = `$${value.toFixed(2)}`;
-
     document.getElementById(
       `overview-awaiting`
     ).innerHTML = `<div class="col-6">
-        <h3 class="p-4 text-center">${money}</h3>
+        <h3 class="p-4 text-center">${value.toMoneyString()}</h3>
       </div>
       <div class="col-6">
-        <h3 class="p-4 text-center">${count}</h3>
+        <h3 class="p-4 text-center">${count.random()}</h3>
       </div>`;
   };
 }
@@ -2206,10 +2201,9 @@ async function overviewTransfer() {
   );
 
   const { available_earnings } = await response.json();
-  const money = `$${available_earnings.amount_in_dollars.toFixed(2)}`;
 
   document.getElementById(`overview-transfer`).innerHTML = `<div class="col-12">
-      <h3 class="p-4 text-center">${money}</h3>
+      <h3 class="p-4 text-center">${available_earnings.amount_in_dollars.toMoneyString()}</h3>
     </div>`;
 }
 
@@ -2220,7 +2214,24 @@ overviewPending();
 overviewAwaiting();
 overviewTransfer();
 
-function returnMonth() {}
+function returnMonth() {
+  const date = new Date(Date.now());
+  const toPST = date.toLocaleString(`en-US`, {
+    timeZone: `America/Los_Angeles`
+  });
+  const isPST = new Date(toPST);
+
+  const d = isPST.getDate();
+  const m = isPST.getMonth() + (d > 1 ? 1 : 0);
+  const mm = `0${m}`.slice(-2);
+  const yyyy = isPST.getFullYear().toString();
+
+  return {
+    start: `${yyyy}${mm}01`,
+    end: `${yyyy}${mm}31`,
+    which: d > 1 ? `This Month` : `Last Month`
+  };
+}
 
 [`today`, `week`, `month`].forEach(i =>
   document
