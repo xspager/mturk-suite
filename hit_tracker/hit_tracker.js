@@ -2,7 +2,7 @@
 
 Object.assign(Number.prototype, {
   random() {
-    return this; // Math.round(Math.random() * 100);
+    return this;// Math.round(Math.random() * 100);
   },
   toMoneyString() {
     return `$${this.random().toFixed(2)}`;
@@ -153,8 +153,7 @@ function updateDashboard(days) {
     const transaction = db.transaction([`day`], `readwrite`);
     const objectStore = transaction.objectStore(`day`);
 
-    Object.keys(days).forEach(key => {
-      const day = days[key];
+    Object.keys(days).forEach(day => {
       const request = objectStore.get(day);
 
       request.onsuccess = event => {
