@@ -1234,7 +1234,7 @@ function importFileDays() {
     const datesToRecount = days.map(currentValue => currentValue.date);
     const recounted = await importFileDaysRecount(datesToRecount);
 
-    const transaction = hitTrackerDB.transaction([`day`], `readwrite`);
+    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`day`], `readwrite`);
     const objectStore = transaction.objectStore(`day`);
 
     for (
