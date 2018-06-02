@@ -1,6 +1,8 @@
+/* globals $ textToSpeech HTML */
+
 Object.assign(Number.prototype, {
   random() {
-    return Math.round(Math.random() * 100);
+    return this; // Math.round(Math.random() * 100);
   },
   toMoneyString() {
     return `$${this.random().toFixed(2)}`;
@@ -49,11 +51,373 @@ function returnMonth() {
   };
 }
 
-// Opens the specified IndexedDB
 function openDatabase(name, version) {
   return new Promise(resolve => {
     const request = window.indexedDB.open(name, version);
     request.onsuccess = event => resolve(event.target.result);
+  });
+}
+
+function syncingStarted() {
+  $(document.getElementById(`sync-modal`)).modal({
+    backdrop: `static`,
+    keyboard: false
+  });
+}
+
+function syncingUpdated(date, message) {
+  document.getElementById(`sync-date`).textContent = date
+    ? [date.slice(0, 4), date.slice(4, 6), date.slice(6, 8)].join(`-`)
+    : null;
+  document.getElementById(`sync-message`).textContent = message || null;
+}
+
+function sycningEnded() {
+  $(document.getElementById(`sync-modal`)).modal(`hide`);
+}
+
+function loggedOut() {
+  textToSpeech(`Attention, you are logged out of MTurk.`);
+  sycningEnded();
+}
+
+function fetchQueue(date) {
+  syncingUpdated(date, `fetching queue`);
+
+  return new Promise(resolve => {
+    async function fetchLoop() {
+      try {
+        const response = await fetch(
+          `https://worker.mturk.com/tasks?format=json`,
+          {
+            credentials: `include`
+          }
+        );
+
+        if (
+          response.ok &&
+          response.url === `https://worker.mturk.com/tasks?format=json`
+        ) {
+          const json = await response.json();
+          resolve(json);
+        } else if (response.url.indexOf(`https://worker.mturk.com/`) === -1) {
+          loggedOut();
+        } else {
+          setTimeout(fetchLoop, 2000);
+        }
+      } catch (error) {
+        setTimeout(fetchLoop, 2000);
+      }
+    }
+
+    fetchLoop();
+  });
+}
+
+function fetchDashboard(date) {
+  syncingUpdated(date, `fetching dashboard`);
+
+  return new Promise(async resolve => {
+    async function fetchLoop() {
+      try {
+        const response = await fetch(
+          `https://worker.mturk.com/dashboard?format=json`,
+          {
+            credentials: `include`
+          }
+        );
+
+        if (
+          response.ok &&
+          response.url === `https://worker.mturk.com/dashboard?format=json`
+        ) {
+          const json = await response.json();
+          resolve(json);
+        } else if (response.url.indexOf(`https://worker.mturk.com/`) === -1) {
+          loggedOut();
+        } else {
+          setTimeout(fetchLoop, 2000);
+        }
+      } catch (error) {
+        setTimeout(fetchLoop, 2000);
+      }
+    }
+
+    fetchLoop();
+  });
+}
+
+function updateDashboard(days) {
+  return new Promise(async resolve => {
+    const db = await openDatabase(`hitTrackerDB`, 1);
+    const transaction = db.transaction([`day`], `readwrite`);
+    const objectStore = transaction.objectStore(`day`);
+
+    Object.keys(days).forEach(key => {
+      const day = days[key];
+      const request = objectStore.get(day);
+
+      request.onsuccess = event => {
+        const result = event.target.result || {
+          date: day,
+          assigned: 0,
+          returned: 0,
+          abandoned: 0,
+          submitted: 0,
+          approved: 0,
+          rejected: 0,
+          pending: 0,
+          paid: 0,
+          earnings: 0
+        };
+
+        result.day = days[day];
+        objectStore.put(result);
+      };
+    });
+
+    transaction.oncomplete = () => {
+      resolve();
+    };
+  });
+}
+
+function syncPrepareDay(date) {
+  syncingUpdated(date, `preparing sync`);
+
+  return new Promise(async resolve => {
+    const queue = await fetchQueue();
+    const hit_ids = queue.tasks.map(o => o.task_id);
+
+    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
+      [`hit`],
+      `readwrite`
+    );
+    const objectStore = transaction.objectStore(`hit`);
+    const index = objectStore.index(`date`);
+    const only = IDBKeyRange.only(date);
+
+    index.openCursor(only).onsuccess = event => {
+      const cursor = event.target.result;
+
+      if (cursor) {
+        if (
+          cursor.value.state.match(/Accepted|Submitted/) ||
+          (cursor.value.state === `Assigned` &&
+            !hit_ids.includes(cursor.value.hit_id))
+        ) {
+          cursor.value.state = `Abandoned`;
+          cursor.update(cursor.value);
+        }
+        cursor.continue();
+      }
+    };
+
+    transaction.oncomplete = () => {
+      resolve();
+    };
+  });
+}
+
+function sync(date) {
+  return new Promise(async resolve => {
+    await syncPrepareDay(date);
+
+    const fetchDate = [
+      date.slice(0, 4),
+      date.slice(4, 6),
+      date.slice(6, 8)
+    ].join(`-`);
+
+    async function fetchLoop(page) {
+      const url = `https://worker.mturk.com/status_details/${fetchDate}?page_number=${page}&format=json`;
+      const response = await fetch(url, {
+        credentials: `include`
+      });
+
+      if (response.ok && response.url === url) {
+        const json = await response.json();
+
+        if (json.num_results > 0) {
+          syncingUpdated(
+            date,
+            `Updating page ${page} of ${Math.ceil(
+              json.total_num_results / 20
+            )} for ${json.total_num_results} HITs`
+          );
+
+          const transaction = (await openDatabase(
+            `hitTrackerDB`,
+            1
+          )).transaction([`hit`], `readwrite`);
+          const objectStore = transaction.objectStore(`hit`);
+
+          json.results.forEach(item => {
+            const hit = item;
+            const request = objectStore.get(hit.hit_id);
+
+            request.onsuccess = event => {
+              const { result } = event.target;
+
+              if (result) {
+                Object.keys(result).forEach(key => {
+                  if (key !== `state`) {
+                    hit[key] = result[key] ? result[key] : hit[key];
+                  }
+                });
+              }
+
+              if (
+                hit.state === `Approved` &&
+                hit.reward.amount_in_dollars === 0
+              ) {
+                hit.state = `Paid`;
+              }
+
+              hit.date = date;
+              objectStore.put(hit);
+            };
+          });
+
+          transaction.oncomplete = () => {
+            const next = page + 1;
+            fetchLoop(next);
+          };
+        } else {
+          resolve();
+        }
+      } else if (response.url.indexOf(`https://worker.mturk.com/`) === -1) {
+        throw new Error(`You are logged out!`);
+      } else {
+        setTimeout(fetchLoop, 2000, page);
+      }
+    }
+
+    fetchLoop(1);
+  });
+}
+
+function countDay(date) {
+  return new Promise(async resolve => {
+    const object = {
+      date,
+
+      assigned: 0,
+      returned: 0,
+      abandoned: 0,
+
+      paid: 0,
+      approved: 0,
+      rejected: 0,
+      submitted: 0,
+
+      earnings: 0
+    };
+
+    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
+      [`hit`],
+      `readonly`
+    );
+    const objectStore = transaction.objectStore(`hit`);
+    const index = objectStore.index(`date`);
+    const only = IDBKeyRange.only(date);
+
+    index.openCursor(only).onsuccess = event => {
+      const cursor = event.target.result;
+
+      if (cursor) {
+        const state = cursor.value.state.toLowerCase();
+
+        object[state] += 1;
+
+        if (state.match(/paid/)) {
+          object.earnings += cursor.value.reward.amount_in_dollars;
+        }
+        cursor.continue();
+      }
+    };
+
+    transaction.oncomplete = () => {
+      object.earnings = Number(object.earnings.toFixed(2));
+      resolve(object);
+    };
+  });
+}
+
+function saveDay(date) {
+  return new Promise(async resolve => {
+    const count = await countDay(date);
+
+    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
+      [`day`],
+      `readwrite`
+    );
+    const objectStore = transaction.objectStore(`day`);
+
+    const request = objectStore.get(date);
+
+    request.onsuccess = event => {
+      const { result } = event.target;
+
+      if (result) {
+        count.day = result.day;
+      }
+
+      objectStore.put(count);
+    };
+
+    transaction.oncomplete = () => {
+      resolve();
+    };
+  });
+}
+
+function checkDays(days) {
+  syncingUpdated(null, `checking last 45 days`);
+
+  const daysArray = Object.keys(days).sort();
+
+  return new Promise(async resolve => {
+    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
+      [`day`],
+      `readwrite`
+    );
+    const objectStore = transaction.objectStore(`day`);
+    const bound = IDBKeyRange.bound(
+      daysArray[0],
+      daysArray[daysArray.length - 1]
+    );
+
+    objectStore.openCursor(bound).onsuccess = event => {
+      const cursor = event.target.result;
+
+      if (cursor) {
+        const { value } = cursor;
+        const now = value.day;
+
+        const pending = now.pending === value.submitted;
+        const approved = now.approved === value.paid;
+        const rejected = now.rejected === value.rejected;
+        const submitted =
+          now.submitted ===
+          value.submitted + value.approved + value.rejected + value.paid;
+
+        if (approved && pending && rejected && submitted) {
+          const i = daysArray.indexOf(value.date);
+
+          if (i !== -1) {
+            const spliced = daysArray.splice(i, 1);
+            saveDay(spliced[0]);
+          }
+        }
+
+        cursor.continue();
+      }
+    };
+
+    transaction.oncomplete = () => {
+      resolve(daysArray);
+    };
   });
 }
 
@@ -91,381 +455,31 @@ function syncLast45() {
     await updateDashboard(days);
     const daysToUpdate = await checkDays(days);
 
+    await Promise.all(
+      daysToUpdate.map(async date => {
+        await sync(date);
+        await saveDay(date);
+      })
+    );
+
+    /*
     for (const date of daysToUpdate) {
       await sync(date);
       await saveDay(date);
     }
+    */
 
     sycningEnded();
     resolve();
   });
 }
 
-function fetchQueue(date) {
-  syncingUpdated(date, `fetching queue`);
-
-  return new Promise(resolve => {
-    (async function fetchLoop() {
-      try {
-        const response = await fetch(
-          `https://worker.mturk.com/tasks?format=json`,
-          {
-            credentials: `include`
-          }
-        );
-
-        if (
-          response.ok &&
-          response.url === `https://worker.mturk.com/tasks?format=json`
-        ) {
-          const json = await response.json();
-          resolve(json);
-        } else if (response.url.indexOf(`https://worker.mturk.com/`) === -1) {
-          // we are logged out here
-        } else {
-          setTimeout(fetchLoop, 2000);
-        }
-      } catch (error) {
-        setTimeout(fetchLoop, 2000);
-      }
-    })();
-  });
-}
-
-function fetchDashboard(date) {
-  syncingUpdated(date, `fetching dashboard`);
-
-  return new Promise(async resolve => {
-    (async function fetchLoop() {
-      try {
-        const response = await fetch(
-          `https://worker.mturk.com/dashboard?format=json`,
-          {
-            credentials: `include`
-          }
-        );
-
-        if (
-          response.ok &&
-          response.url === `https://worker.mturk.com/dashboard?format=json`
-        ) {
-          const json = await response.json();
-          resolve(json);
-        } else if (response.url.indexOf(`https://worker.mturk.com/`) === -1) {
-          return loggedOut();
-        } else {
-          setTimeout(fetchLoop, 2000);
-        }
-      } catch (error) {
-        setTimeout(fetchLoop, 2000);
-      }
-    })();
-  });
-}
-
-function updateDashboard(days) {
-  return new Promise(async resolve => {
-    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
-      [`day`],
-      `readwrite`
-    );
-    const objectStore = transaction.objectStore(`day`);
-
-    for (const day in days) {
-      const request = objectStore.get(day);
-
-      request.onsuccess = event => {
-        const result = event.target.result || {
-          date: day,
-          assigned: 0,
-          returned: 0,
-          abandoned: 0,
-          submitted: 0,
-          approved: 0,
-          rejected: 0,
-          pending: 0,
-          paid: 0,
-          earnings: 0
-        };
-
-        result.day = days[day];
-        objectStore.put(result);
-      };
-    }
-
-    transaction.oncomplete = event => {
-      resolve();
-    };
-  });
-}
-
-function checkDays(days) {
-  syncingUpdated(null, `checking last 45 days`);
-
-  const daysArray = Object.keys(days).sort();
-
-  return new Promise(async resolve => {
-    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
-      [`day`],
-      `readwrite`
-    );
-    const objectStore = transaction.objectStore(`day`);
-    const bound = IDBKeyRange.bound(
-      daysArray[0],
-      daysArray[daysArray.length - 1]
-    );
-
-    objectStore.openCursor(bound).onsuccess = event => {
-      const cursor = event.target.result;
-
-      if (cursor) {
-        const value = cursor.value;
-        const now = value.day;
-
-        const pending = now.pending === value.submitted;
-        const approved = now.approved === value.paid;
-        const rejected = now.rejected === value.rejected;
-        const submitted =
-          now.submitted ===
-          value.submitted + value.approved + value.rejected + value.paid;
-
-        if (approved && pending && rejected && submitted) {
-          const i = daysArray.indexOf(value.date);
-
-          if (i !== -1) {
-            const spliced = daysArray.splice(i, 1);
-            saveDay(spliced[0]);
-          }
-        }
-
-        cursor.continue();
-      }
-    };
-
-    transaction.oncomplete = event => {
-      resolve(daysArray);
-    };
-  });
-}
-
-function saveDay(date) {
-  return new Promise(async resolve => {
-    const count = await countDay(date);
-
-    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
-      [`day`],
-      `readwrite`
-    );
-    const objectStore = transaction.objectStore(`day`);
-
-    const request = objectStore.get(date);
-
-    request.onsuccess = event => {
-      const result = event.target.result;
-
-      if (result) {
-        count.day = result.day;
-      }
-
-      objectStore.put(count);
-    };
-
-    transaction.oncomplete = event => {
-      resolve();
-    };
-  });
-}
-
-function countDay(date) {
-  return new Promise(async resolve => {
-    const object = {
-      date: date,
-
-      assigned: 0,
-      returned: 0,
-      abandoned: 0,
-
-      paid: 0,
-      approved: 0,
-      rejected: 0,
-      submitted: 0,
-
-      earnings: 0
-    };
-
-    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
-      [`hit`],
-      `readonly`
-    );
-    const objectStore = transaction.objectStore(`hit`);
-    const index = objectStore.index(`date`);
-    const only = IDBKeyRange.only(date);
-
-    index.openCursor(only).onsuccess = event => {
-      const cursor = event.target.result;
-
-      if (cursor) {
-        const state = cursor.value.state.toLowerCase();
-
-        object[state]++;
-
-        if (state.match(/paid/)) {
-          object.earnings += cursor.value.reward.amount_in_dollars;
-        }
-        cursor.continue();
-      }
-    };
-
-    transaction.oncomplete = event => {
-      object.earnings = Number(object.earnings.toFixed(2));
-      resolve(object);
-    };
-  });
-}
-
-function syncPrepareDay(date) {
-  syncingUpdated(date, `preparing sync`);
-
-  return new Promise(async resolve => {
-    const queue = await fetchQueue();
-    const hit_ids = queue.tasks.map(o => o.task_id);
-
-    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
-      [`hit`],
-      `readwrite`
-    );
-    const objectStore = transaction.objectStore(`hit`);
-    const index = objectStore.index(`date`);
-    const only = IDBKeyRange.only(date);
-
-    index.openCursor(only).onsuccess = event => {
-      const cursor = event.target.result;
-
-      if (cursor) {
-        if (
-          cursor.value.state.match(/Accepted|Submitted/) ||
-          (cursor.value.state === `Assigned` &&
-            !hit_ids.includes(cursor.value.hit_id))
-        ) {
-          cursor.value.state = `Abandoned`;
-          cursor.update(cursor.value);
-        }
-        cursor.continue();
-      }
-    };
-
-    transaction.oncomplete = event => {
-      resolve();
-    };
-  });
-}
-
-function sync(date) {
-  return new Promise(async (resolve, reject) => {
-    await syncPrepareDay(date);
-
-    const fetchDate = [
-      date.slice(0, 4),
-      date.slice(4, 6),
-      date.slice(6, 8)
-    ].join(`-`);
-
-    (async function fetchLoop(page) {
-      const url = `https://worker.mturk.com/status_details/${fetchDate}?page_number=${page}&format=json`;
-      const response = await fetch(url, {
-        credentials: `include`
-      });
-
-      if (response.ok && response.url === url) {
-        const json = await response.json();
-
-        if (json.num_results > 0) {
-          syncingUpdated(
-            date,
-            `Updating page ${page} of ${Math.ceil(
-              json.total_num_results / 20
-            )} for ${json.total_num_results} HITs`
-          );
-
-          const transaction = (await openDatabase(
-            `hitTrackerDB`,
-            1
-          )).transaction([`hit`], `readwrite`);
-          const objectStore = transaction.objectStore(`hit`);
-
-          for (const hit of json.results) {
-            const request = objectStore.get(hit.hit_id);
-
-            request.onsuccess = event => {
-              const result = event.target.result;
-
-              if (result) {
-                for (const prop in result) {
-                  if (prop !== `state`) {
-                    hit[prop] = result[prop] ? result[prop] : hit[prop];
-                  }
-                }
-              }
-
-              if (
-                hit.state === `Approved` &&
-                hit.reward.amount_in_dollars == 0
-              ) {
-                hit.state = `Paid`;
-              }
-
-              hit.date = date;
-              objectStore.put(hit);
-            };
-          }
-
-          transaction.oncomplete = e => {
-            return fetchLoop(++page);
-          };
-        } else {
-          resolve();
-        }
-      } else if (response.url.indexOf(`https://worker.mturk.com/`) === -1) {
-        throw `You are logged out!`;
-      } else {
-        return setTimeout(fetchLoop, 2000, page);
-      }
-    })(1);
-  });
-}
-
-function syncingStarted() {
-  updating = true;
-
-  $(document.getElementById(`sync-modal`)).modal({
-    backdrop: `static`,
-    keyboard: false
-  });
-}
-
-function syncingUpdated(date, message) {
-  document.getElementById(`sync-date`).textContent = date
-    ? [date.slice(0, 4), date.slice(4, 6), date.slice(6, 8)].join(`-`)
-    : null;
-  document.getElementById(`sync-message`).textContent = message || null;
-}
-
-function sycningEnded() {
-  updating = false;
-  $(document.getElementById(`sync-modal`)).modal(`hide`);
-}
-
-function loggedOut() {
-  textToSpeech(`Attention, you are logged out of MTurk.`);
-  sycningEnded();
-}
-
 function mturkDate() {
   function dst() {
     const today = new Date();
     const year = today.getFullYear();
-    let start = new Date(`March 14, ${year} 02:00:00`);
-    let end = new Date(`November 07, ${year} 02:00:00`);
+    const start = new Date(`March 14, ${year} 02:00:00`);
+    const end = new Date(`November 07, ${year} 02:00:00`);
     let day = start.getDay();
     start.setDate(14 - day);
     day = end.getDay();
@@ -479,342 +493,76 @@ function mturkDate() {
   const amz = new Date(utc + 3600000 * offset);
   const day =
     amz.getDate() < 10
-      ? `0` + amz.getDate().toString()
+      ? `0${amz.getDate().toString()}`
       : amz.getDate().toString();
   const month =
     amz.getMonth() + 1 < 10
-      ? `0` + (amz.getMonth() + 1).toString()
+      ? `0${(amz.getMonth() + 1).toString()}`
       : (amz.getMonth() + 1).toString();
   const year = amz.getFullYear().toString();
   return year + month + day;
 }
 
-function mturkDateString() {
-  function dst() {
-    const today = new Date();
-    const year = today.getFullYear();
-    let start = new Date(`March 14, ${year} 02:00:00`);
-    let end = new Date(`November 07, ${year} 02:00:00`);
-    let day = start.getDay();
-    start.setDate(14 - day);
-    day = end.getDay();
-    end.setDate(7 - day);
-    return !!(today >= start && today < end);
+function statusStart(opts) {
+  const statusModal = document.getElementById(`status-modal`);
+  const statusHeader = document.getElementById(`status-header`);
+  const statusMessage = document.getElementById(`status-message`);
+
+  if (opts.header) {
+    statusHeader.textContent = opts.header;
   }
 
-  const given = new Date();
-  const utc = given.getTime() + given.getTimezoneOffset() * 60000;
-  const offset = dst() === true ? `-7` : `-8`;
-  const amz = new Date(utc + 3600000 * offset);
-  return amz;
+  if (opts.message) {
+    statusMessage.textContent = opts.message;
+  }
+
+  $(statusModal).modal({
+    backdrop: `static`,
+    keyboard: false
+  });
 }
 
-document.getElementById(`sync-today`).addEventListener(`click`, async e => {
-  await syncDay(mturkDate());
+function statusUpdate(opts) {
+  const statusHeader = document.getElementById(`status-header`);
+  const statusMessage = document.getElementById(`status-message`);
 
-  todaysOverview();
-  trackerOverview();
+  if (opts.header) {
+    statusHeader.textContent = opts.header;
+  }
 
-  chrome.runtime.sendMessage({
-    hitTrackerGetProjected: true
-  });
-});
-
-document
-  .getElementById(`sync-last-45-days`)
-  .addEventListener(`click`, async e => {
-    await syncLast45();
-
-    todaysOverview();
-    trackerOverview();
-
-    chrome.runtime.sendMessage({
-      function: `hitTrackerGetProjected`
-    });
-  });
-
-document
-  .getElementById(`requester-overview`)
-  .addEventListener(`click`, requesterOverview);
-document
-  .getElementById(`daily-overview`)
-  .addEventListener(`click`, dailyOverview);
-document.getElementById(`search`).addEventListener(`click`, search);
-
-async function requesterOverview() {
-  statusStart({
-    header: `Requester Overview`,
-    message: `Starting`
-  });
-
-  const results = document.getElementById(`history-results`);
-  const dateTo = document.getElementById(`date-to`).value;
-  const dateFrom = document.getElementById(`date-from`).value;
-
-  const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
-    [`hit`],
-    `readonly`
-  );
-  const objectStore = transaction.objectStore(`hit`);
-  const range = IDBKeyRange.bound(
-    dateFrom.replace(/-/g, ``) || `0`,
-    dateTo.replace(/-/g, ``) || `99999999`
-  );
-
-  let cursorCount = 0,
-    cursorAccumulator = {};
-
-  objectStore.index(`date`).openCursor(range).onsuccess = event => {
-    const cursor = event.target.result;
-
-    if (cursor) {
-      statusUpdate({ message: `Processing HIT ${++cursorCount}` });
-
-      const hit = cursor.value;
-      const requester_id = hit.requester_id;
-
-      if (hit.state.match(/Submitted|Pending|Approved|Paid/)) {
-        if (cursorAccumulator[requester_id]) {
-          cursorAccumulator[requester_id].count += 1;
-          cursorAccumulator[requester_id].value += hit.reward.amount_in_dollars;
-        } else {
-          cursorAccumulator[requester_id] = {
-            id: requester_id,
-            name: hit.requester_name,
-            count: 1,
-            value: hit.reward.amount_in_dollars
-          };
-        }
-      }
-
-      return cursor.continue();
-    } else {
-      while (results.firstChild) {
-        results.removeChild(results.firstChild);
-      }
-
-      const sorted = Object.keys(cursorAccumulator).sort(
-        (a, b) => cursorAccumulator[a].value - cursorAccumulator[b].value
-      );
-
-      for (let i = sorted.length - 1; i > -1; i--) {
-        const req = cursorAccumulator[sorted[i]];
-
-        const tr = document.createElement(`tr`);
-
-        const requester = document.createElement(`td`);
-        tr.append(requester);
-
-        const requesterView = document.createElement(`button`);
-        requesterView.className = `btn btn-sm btn-primary mr-1`;
-        requesterView.textContent = `View`;
-        requesterView.addEventListener(`click`, async event => {
-          document.getElementById(`view`).value = ``;
-          document.getElementById(`matching`).value = req.id;
-          document.getElementById(`date-from`).value = ``;
-          document.getElementById(`date-to`).value = ``;
-          search();
-        });
-        requester.appendChild(requesterView);
-
-        const requesterLink = document.createElement(`a`);
-        requesterLink.href = `https://worker.mturk.com/requesters/${
-          req.id
-        }/projects`;
-        requesterLink.target = `_blank`;
-        requesterLink.textContent = req.name;
-        requester.appendChild(requesterLink);
-
-        const count = document.createElement(`td`);
-        count.textContent = req.count;
-        tr.appendChild(count);
-
-        const value = document.createElement(`td`);
-        value.textContent = toMoneyString(req.value);
-        tr.appendChild(value);
-
-        results.appendChild(tr);
-      }
-    }
-  };
-
-  transaction.oncomplete = event => {
-    const tr = document.createElement(`tr`);
-    tr.className = `bg-primary text-white`;
-
-    const requester = document.createElement(`td`);
-    requester.textContent = `Requester`;
-    tr.append(requester);
-
-    const count = document.createElement(`td`);
-    count.textContent = `HITs`;
-    tr.appendChild(count);
-
-    const value = document.createElement(`td`);
-    value.textContent = `Reward`;
-    tr.appendChild(value);
-
-    results.prepend(tr);
-
-    return statusEnd();
-  };
+  if (opts.message) {
+    statusMessage.textContent = opts.message;
+  }
 }
 
-async function dailyOverview() {
-  searchStart();
+function statusEnd() {
+  const statusModal = document.getElementById(`status-modal`);
+  const statusHeader = document.getElementById(`status-header`);
+  const statusMessage = document.getElementById(`status-message`);
 
-  const results = document.getElementById(`history-results`);
-  const dateTo = document.getElementById(`date-to`).value;
-  const dateFrom = document.getElementById(`date-from`).value;
+  statusHeader.textContent = ``;
+  statusMessage.textContent = ``;
 
-  const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
-    [`day`],
-    `readonly`
-  );
-  const objectStore = transaction.objectStore(`day`);
+  $(statusModal).modal(`hide`);
+}
 
-  if (dateTo || dateFrom) {
-    const days = [];
+function searchingUpdate(message) {
+  document.getElementById(`searching-message`).textContent = message || null;
+}
 
-    objectStore.openCursor(
-      IDBKeyRange.bound(
-        dateFrom.replace(/-/g, ``) || `0`,
-        dateTo.replace(/-/g, ``) || `99999999`
-      )
-    ).onsuccess = event => {
-      const cursor = event.target.result;
+function searchStart() {
+  const modal = document.getElementById(`searching-modal`);
+  searchingUpdate(`This may take some time`);
 
-      if (cursor) {
-        days.push(cursor.value);
-        return cursor.continue();
-      } else {
-        return process(days);
-      }
-    };
-  } else {
-    objectStore.getAll().onsuccess = event => {
-      const hits = event.target.result;
-      return process(event.target.result);
-    };
-  }
+  $(modal).modal({
+    backdrop: `static`,
+    keyboard: false
+  });
+}
 
-  transaction.oncomplete = event => {
-    const th = document.createElement(`tr`);
-    th.className = `bg-primary text-white`;
-
-    const date = document.createElement(`td`);
-    date.textContent = `Date`;
-    th.appendChild(date);
-
-    const submitted = document.createElement(`td`);
-    submitted.textContent = `Submitted`;
-    th.appendChild(submitted);
-
-    const approved = document.createElement(`td`);
-    approved.textContent = `Approved`;
-    th.appendChild(approved);
-
-    const rejected = document.createElement(`td`);
-    rejected.textContent = `Rejected`;
-    th.appendChild(rejected);
-
-    const pending = document.createElement(`td`);
-    pending.textContent = `Pending`;
-    th.appendChild(pending);
-
-    const ret_aban = document.createElement(`td`);
-    ret_aban.textContent = `Returned/Abandoned`;
-    th.appendChild(ret_aban);
-
-    const earningsHits = document.createElement(`td`);
-    earningsHits.textContent = `Earnings HITs`;
-    th.appendChild(earningsHits);
-
-    results.prepend(th);
-
-    return searchEnd();
-  };
-
-  function process(days) {
-    while (results.firstChild) {
-      results.removeChild(results.firstChild);
-    }
-
-    for (const day of days) {
-      const tr = document.createElement(`tr`);
-      const formattedDate = [
-        day.date.slice(0, 4),
-        day.date.slice(4, 6),
-        day.date.slice(6, 8)
-      ].join(`-`);
-
-      const date = document.createElement(`td`);
-      date.textContent = formattedDate;
-      tr.appendChild(date);
-
-      const submitted = document.createElement(`td`);
-      submitted.textContent =
-        day.submitted + day.rejected + day.approved + day.paid;
-      tr.appendChild(submitted);
-
-      const approved = document.createElement(`td`);
-      approved.textContent = day.approved + day.paid;
-      tr.appendChild(approved);
-
-      const rejected = document.createElement(`td`);
-      rejected.textContent = day.rejected;
-      tr.appendChild(rejected);
-
-      const pending = document.createElement(`td`);
-      pending.textContent = day.submitted;
-      tr.appendChild(pending);
-
-      const ret_aban = document.createElement(`td`);
-      ret_aban.textContent = day.returned + day.abandoned;
-      tr.appendChild(ret_aban);
-
-      const earningsHits = document.createElement(`td`);
-      earningsHits.textContent = toMoneyString(day.earnings);
-      tr.appendChild(earningsHits);
-
-      const actions = document.createElement(`span`);
-      date.prepend(actions);
-
-      const viewThisDay = document.createElement(`button`);
-      viewThisDay.className = `btn btn-sm btn-primary mr-1`;
-      viewThisDay.textContent = `View`;
-      viewThisDay.addEventListener(`click`, async event => {
-        document.getElementById(`view`).value = ``;
-        document.getElementById(`matching`).value = ``;
-        document.getElementById(`date-from`).value = formattedDate;
-        document.getElementById(`date-to`).value = formattedDate;
-        search();
-      });
-      actions.appendChild(viewThisDay);
-
-      const syncThisDay = document.createElement(`button`);
-      syncThisDay.className = `btn btn-sm btn-primary mr-1`;
-      syncThisDay.textContent = `Sync`;
-      syncThisDay.addEventListener(`click`, async event => {
-        await syncDay(day.date);
-        const classList =
-          event.target.parentElement.parentElement.parentElement.classList;
-        classList.add(`bg-warning`);
-        classList.add(`text-white`);
-      });
-      actions.appendChild(syncThisDay);
-
-      if (
-        !day.day ||
-        day.day.submitted !==
-          day.submitted + day.rejected + day.approved + day.paid
-      ) {
-        syncThisDay.classList.add(`btn-warning`);
-      }
-
-      results.prepend(tr);
-    }
-  }
+function searchEnd() {
+  const modal = document.getElementById(`searching-modal`);
+  $(modal).modal(`hide`);
 }
 
 async function search() {
@@ -863,9 +611,10 @@ async function search() {
     const cursor = event.target.result;
 
     if (cursor) {
-      searchingUpdate(`Processing HIT ${++count}`);
+      count += 1;
+      searchingUpdate(`Processing HIT ${count}`);
 
-      const value = cursor.value;
+      const { value } = cursor;
 
       if (matching) {
         const hitValues = [
@@ -877,12 +626,11 @@ async function search() {
         if (matchingType === `contain`) {
           let contains = false;
 
-          for (const item of hitValues) {
-            if (item && ~item.toLowerCase().indexOf(matching.toLowerCase())) {
+          hitValues.forEach(item => {
+            if (item && item.toLowerCase().includes(matching.toLowerCase())) {
               contains = true;
-              break;
             }
-          }
+          });
 
           if (!contains) {
             return cursor.continue();
@@ -923,10 +671,9 @@ async function search() {
         title.prepend(viewSource);
 
         if (value.answer) {
-          viewSource.title = Object.keys(value.answer).reduce(
-            (a, cV) => (a += `<b>${cV}</b>: ${value.answer[cV]} <br>`),
-            ``
-          );
+          viewSource.title = Object.keys(value.answer)
+            .map(val => `<b>${val}</b>: ${value.answer[val]} <br>`)
+            .join(``);
 
           viewSource.dataset.html = `true`;
           viewSource.dataset.toggle = `tooltip`;
@@ -934,7 +681,7 @@ async function search() {
       }
 
       const reward = document.createElement(`td`);
-      reward.textContent = toMoneyString(value.reward.amount_in_dollars);
+      reward.textContent = value.reward.amount_in_dollars.toMoneyString();
       tr.appendChild(reward);
 
       const state = document.createElement(`td`);
@@ -942,12 +689,12 @@ async function search() {
       tr.appendChild(state);
 
       fragment.appendChild(tr);
-
+      
       return cursor.continue();
     }
   };
 
-  transaction.oncomplete = event => {
+  transaction.oncomplete = () => {
     const th = document.createElement(`tr`);
     th.className = `bg-primary text-white`;
 
@@ -976,118 +723,317 @@ async function search() {
     results.appendChild(th);
     results.appendChild(fragment);
 
-    return searchEnd();
+    searchEnd();
   };
 }
 
-function searchStart() {
-  const modal = document.getElementById(`searching-modal`);
-  searchingUpdate(`This may take some time`);
-
-  $(modal).modal({
-    backdrop: `static`,
-    keyboard: false
+async function requesterOverview() {
+  statusStart({
+    header: `Requester Overview`,
+    message: `Starting`
   });
+
+  const results = document.getElementById(`history-results`);
+  const dateTo = document.getElementById(`date-to`).value;
+  const dateFrom = document.getElementById(`date-from`).value;
+
+  const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
+    [`hit`],
+    `readonly`
+  );
+  const objectStore = transaction.objectStore(`hit`);
+  const range = IDBKeyRange.bound(
+    dateFrom.replace(/-/g, ``) || `0`,
+    dateTo.replace(/-/g, ``) || `99999999`
+  );
+
+  let cursorCount = 0;
+  const cursorAccumulator = {};
+
+  objectStore.index(`date`).openCursor(range).onsuccess = event => {
+    const cursor = event.target.result;
+
+    if (cursor) {
+      cursorCount += 1;
+      statusUpdate({ message: `Processing HIT ${cursorCount}` });
+
+      const hit = cursor.value;
+      const { requester_id } = hit;
+
+      if (hit.state.match(/Submitted|Pending|Approved|Paid/)) {
+        if (cursorAccumulator[requester_id]) {
+          cursorAccumulator[requester_id].count += 1;
+          cursorAccumulator[requester_id].value += hit.reward.amount_in_dollars;
+        } else {
+          cursorAccumulator[requester_id] = {
+            id: requester_id,
+            name: hit.requester_name,
+            count: 1,
+            value: hit.reward.amount_in_dollars
+          };
+        }
+      }
+
+      cursor.continue();
+    } else {
+      while (results.firstChild) {
+        results.removeChild(results.firstChild);
+      }
+
+      const sorted = Object.keys(cursorAccumulator).sort(
+        (a, b) => cursorAccumulator[a].value - cursorAccumulator[b].value
+      );
+
+      for (let i = sorted.length - 1; i > -1; i -= 1) {
+        const req = cursorAccumulator[sorted[i]];
+
+        const tr = document.createElement(`tr`);
+
+        const requester = document.createElement(`td`);
+        tr.append(requester);
+
+        const requesterView = document.createElement(`button`);
+        requesterView.className = `btn btn-sm btn-primary mr-1`;
+        requesterView.textContent = `View`;
+        requesterView.addEventListener(`click`, async () => {
+          document.getElementById(`view`).value = ``;
+          document.getElementById(`matching`).value = req.id;
+          document.getElementById(`date-from`).value = ``;
+          document.getElementById(`date-to`).value = ``;
+          search();
+        });
+        requester.appendChild(requesterView);
+
+        const requesterLink = document.createElement(`a`);
+        requesterLink.href = `https://worker.mturk.com/requesters/${
+          req.id
+        }/projects`;
+        requesterLink.target = `_blank`;
+        requesterLink.textContent = req.name;
+        requester.appendChild(requesterLink);
+
+        const count = document.createElement(`td`);
+        count.textContent = req.count;
+        tr.appendChild(count);
+
+        const value = document.createElement(`td`);
+        value.textContent = req.value.toMoneyString();
+        tr.appendChild(value);
+
+        results.appendChild(tr);
+      }
+    }
+  };
+
+  transaction.oncomplete = () => {
+    const tr = document.createElement(`tr`);
+    tr.className = `bg-primary text-white`;
+
+    const requester = document.createElement(`td`);
+    requester.textContent = `Requester`;
+    tr.append(requester);
+
+    const count = document.createElement(`td`);
+    count.textContent = `HITs`;
+    tr.appendChild(count);
+
+    const value = document.createElement(`td`);
+    value.textContent = `Reward`;
+    tr.appendChild(value);
+
+    results.prepend(tr);
+
+    statusEnd();
+  };
 }
 
-function searchingUpdate(message) {
-  document.getElementById(`searching-message`).textContent = message || null;
-}
+async function dailyOverview() {
+  searchStart();
 
-function searchEnd() {
-  const modal = document.getElementById(`searching-modal`);
+  const results = document.getElementById(`history-results`);
+  const dateTo = document.getElementById(`date-to`).value;
+  const dateFrom = document.getElementById(`date-from`).value;
 
-  $(modal).modal(`hide`);
+  function process(days) {
+    while (results.firstChild) {
+      results.removeChild(results.firstChild);
+    }
+
+    days.forEach(day => {
+      const tr = document.createElement(`tr`);
+      const formattedDate = [
+        day.date.slice(0, 4),
+        day.date.slice(4, 6),
+        day.date.slice(6, 8)
+      ].join(`-`);
+
+      const date = document.createElement(`td`);
+      date.textContent = formattedDate;
+      tr.appendChild(date);
+
+      const submitted = document.createElement(`td`);
+      submitted.textContent =
+        day.submitted + day.rejected + day.approved + day.paid;
+      tr.appendChild(submitted);
+
+      const approved = document.createElement(`td`);
+      approved.textContent = day.approved + day.paid;
+      tr.appendChild(approved);
+
+      const rejected = document.createElement(`td`);
+      rejected.textContent = day.rejected;
+      tr.appendChild(rejected);
+
+      const pending = document.createElement(`td`);
+      pending.textContent = day.submitted;
+      tr.appendChild(pending);
+
+      const ret_aban = document.createElement(`td`);
+      ret_aban.textContent = day.returned + day.abandoned;
+      tr.appendChild(ret_aban);
+
+      const earningsHits = document.createElement(`td`);
+      earningsHits.textContent = day.earnings.toMoneyString();
+      tr.appendChild(earningsHits);
+
+      const actions = document.createElement(`span`);
+      date.prepend(actions);
+
+      const viewThisDay = document.createElement(`button`);
+      viewThisDay.className = `btn btn-sm btn-primary mr-1`;
+      viewThisDay.textContent = `View`;
+      viewThisDay.addEventListener(`click`, async () => {
+        document.getElementById(`view`).value = ``;
+        document.getElementById(`matching`).value = ``;
+        document.getElementById(`date-from`).value = formattedDate;
+        document.getElementById(`date-to`).value = formattedDate;
+        search();
+      });
+      actions.appendChild(viewThisDay);
+
+      const syncThisDay = document.createElement(`button`);
+      syncThisDay.className = `btn btn-sm btn-primary mr-1`;
+      syncThisDay.textContent = `Sync`;
+      syncThisDay.addEventListener(`click`, async event => {
+        await syncDay(day.date);
+        const {
+          classList
+        } = event.target.parentElement.parentElement.parentElement;
+        classList.add(`bg-warning`);
+        classList.add(`text-white`);
+      });
+      actions.appendChild(syncThisDay);
+
+      if (
+        !day.day ||
+        day.day.submitted !==
+          day.submitted + day.rejected + day.approved + day.paid
+      ) {
+        syncThisDay.classList.add(`btn-warning`);
+      }
+
+      results.prepend(tr);
+    });
+  }
+
+  const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
+    [`day`],
+    `readonly`
+  );
+  const objectStore = transaction.objectStore(`day`);
+
+  if (dateTo || dateFrom) {
+    const days = [];
+
+    objectStore.openCursor(
+      IDBKeyRange.bound(
+        dateFrom.replace(/-/g, ``) || `0`,
+        dateTo.replace(/-/g, ``) || `99999999`
+      )
+    ).onsuccess = event => {
+      const cursor = event.target.result;
+
+      if (cursor) {
+        days.push(cursor.value);
+        cursor.continue();
+      } else {
+        process(days);
+      }
+    };
+  } else {
+    objectStore.getAll().onsuccess = event => {
+      process(event.target.result);
+    };
+  }
+
+  transaction.oncomplete = () => {
+    const th = document.createElement(`tr`);
+    th.className = `bg-primary text-white`;
+
+    const date = document.createElement(`td`);
+    date.textContent = `Date`;
+    th.appendChild(date);
+
+    const submitted = document.createElement(`td`);
+    submitted.textContent = `Submitted`;
+    th.appendChild(submitted);
+
+    const approved = document.createElement(`td`);
+    approved.textContent = `Approved`;
+    th.appendChild(approved);
+
+    const rejected = document.createElement(`td`);
+    rejected.textContent = `Rejected`;
+    th.appendChild(rejected);
+
+    const pending = document.createElement(`td`);
+    pending.textContent = `Pending`;
+    th.appendChild(pending);
+
+    const ret_aban = document.createElement(`td`);
+    ret_aban.textContent = `Returned/Abandoned`;
+    th.appendChild(ret_aban);
+
+    const earningsHits = document.createElement(`td`);
+    earningsHits.textContent = `Earnings HITs`;
+    th.appendChild(earningsHits);
+
+    results.prepend(th);
+
+    return searchEnd();
+  };
 }
 
 function formatDate(date) {
   return [date.slice(0, 4), date.slice(4, 6), date.slice(6, 8)].join(`-`);
 }
 
-function statusStart(opts) {
+function currentStatus(type, message) {
   const statusModal = document.getElementById(`status-modal`);
-  const statusHeader = document.getElementById(`status-header`);
-  const statusMessage = document.getElementById(`status-message`);
 
-  if (opts.header) {
-    statusHeader.textContent = opts.header;
-  }
+  if (type === `show`)
+    $(statusModal).modal({ backdrop: `static`, keyboard: false });
+  else if (type === `hide`) $(statusModal).modal(`hide`);
 
-  if (opts.message) {
-    statusMessage.textContent = opts.message;
-  }
-
-  $(statusModal).modal({
-    backdrop: `static`,
-    keyboard: false
-  });
+  document.getElementById(`status-message`).textContent = message || ``;
 }
 
-function statusUpdate(opts) {
-  const statusHeader = document.getElementById(`status-header`);
-  const statusMessage = document.getElementById(`status-message`);
+function importFileIsHitAutoApp(hit) {
+  const editable = hit;
+  if (hit.state === `Approved` || hit.state === `Submitted`) {
+    const isAfter30 = new Date(formatDate(hit.date)).getTime();
+    const whenAfter30 =
+      new Date(formatDate(mturkDate())).getTime() - 31 * 24 * 60 * 60 * 1000;
 
-  if (opts.header) {
-    statusHeader.textContent = opts.header;
-  }
-
-  if (opts.message) {
-    statusMessage.textContent = opts.message;
-  }
-}
-
-function statusEnd() {
-  const statusModal = document.getElementById(`status-modal`);
-  const statusHeader = document.getElementById(`status-header`);
-  const statusMessage = document.getElementById(`status-message`);
-
-  statusHeader.textContent = ``;
-  statusMessage.textContent = ``;
-
-  $(statusModal).modal(`hide`);
-}
-
-document
-  .getElementById(`import`)
-  .addEventListener(`click`, event =>
-    document.getElementById(`import-file`).click()
-  );
-document
-  .getElementById(`import-file`)
-  .addEventListener(`change`, event => importFile(event.target.files[0]));
-document
-  .getElementById(`export`)
-  .addEventListener(`click`, event => exportFile());
-
-// refactor needed end
-
-function importFile() {
-  const [file] = arguments;
-
-  const reader = new window.FileReader();
-  reader.readAsText(file);
-
-  reader.onload = async event => {
-    currentStatus(`show`, `Loading File...`);
-
-    const json = JSON.parse(event.target.result);
-
-    if (json.hits && json.days) {
-      await importFileHits(json.hits);
-      await importFileDays(json.days);
-    } else if (json.HIT && json.STATS) {
-      const converted = importFileConvertHITDB(json);
-      await importFileHits(converted.hits);
-      await importFileDays(converted.days);
+    if (isAfter30 < whenAfter30) {
+      editable.state = `Paid`;
     }
+  }
 
-    currentStatus(`hide`);
-  };
+  return editable;
 }
 
-function importFileHits() {
-  const [hits] = arguments;
-
+function importFileHits(hits) {
   currentStatus(`update`, `Importing HITs...`);
 
   return new Promise(async resolve => {
@@ -1098,9 +1044,9 @@ function importFileHits() {
     const objectStore = transaction.objectStore(`hit`);
 
     for (
-      let i = 0, keys = Object.keys(hits), length = keys.length;
+      let i = 0, keys = Object.keys(hits), { length } = keys;
       i < length;
-      i++
+      i += 1
     ) {
       const hit = hits[keys[i]];
 
@@ -1110,15 +1056,64 @@ function importFileHits() {
       }
     }
 
-    transaction.oncomplete = event => {
+    transaction.oncomplete = () => {
       resolve();
     };
   });
 }
 
-function importFileDays() {
-  const [days] = arguments;
+function importFileDaysRecount(dates) {
+  const promiseData = {};
 
+  return new Promise(async resolve => {
+    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
+      [`hit`],
+      `readonly`
+    );
+    const objectStore = transaction.objectStore(`hit`);
+
+    for (let i = 0, { length } = dates; i < length; i += 1) {
+      const date = dates[i];
+
+      const dateCount = {
+        assigned: 0,
+        returned: 0,
+        abandoned: 0,
+        paid: 0,
+        approved: 0,
+        rejected: 0,
+        submitted: 0,
+        earnings: 0
+      };
+
+      objectStore
+        .index(`date`)
+        .openCursor(window.IDBKeyRange.only(date)).onsuccess = event => {
+        const cursor = event.target.result;
+
+        if (cursor) {
+          const state = cursor.value.state.toLowerCase();
+
+          dateCount[state] += 1;
+
+          if (state.match(/paid/))
+            dateCount.earnings += cursor.value.reward.amount_in_dollars;
+
+          cursor.continue();
+        } else {
+          dateCount.earnings = dateCount.earnings.toFixed(2);
+          promiseData[date] = dateCount;
+        }
+      };
+    }
+
+    transaction.oncomplete = () => {
+      resolve(promiseData);
+    };
+  });
+}
+
+function importFileDays(days) {
   return new Promise(async resolve => {
     const datesToRecount = days.map(currentValue => currentValue.date);
     const recounted = await importFileDaysRecount(datesToRecount);
@@ -1130,9 +1125,9 @@ function importFileDays() {
     const objectStore = transaction.objectStore(`day`);
 
     for (
-      let i = 0, keys = Object.keys(days), length = keys.length;
+      let i = 0, keys = Object.keys(days), { length } = keys;
       i < length;
-      i++
+      i += 1
     ) {
       const day = days[keys[i]];
 
@@ -1142,15 +1137,13 @@ function importFileDays() {
       }
     }
 
-    transaction.oncomplete = event => {
+    transaction.oncomplete = () => {
       resolve();
     };
   });
 }
 
-function importFileConvertHITDB() {
-  const [json] = arguments;
-
+function importFileConvertHITDB(json) {
   const hits = json.HIT.map(currentValue => ({
     assignment_id: null,
     date: currentValue.date.replace(/-/g, ``),
@@ -1180,96 +1173,29 @@ function importFileConvertHITDB() {
     earnings: 0
   }));
 
-  return { hits: hits, days: days };
+  return { hits, days };
 }
 
-function importFileIsHitAutoApp() {
-  const [hit] = arguments;
+function importFile(file) {
+  const reader = new window.FileReader();
+  reader.readAsText(file);
 
-  if (hit.state === `Approved` || hit.state === `Submitted`) {
-    const isAfter30 = new Date(formatDate(hit.date)).getTime();
-    const whenAfter30 =
-      new Date(formatDate(mturkDate())).getTime() - 31 * 24 * 60 * 60 * 1000;
+  reader.onload = async event => {
+    currentStatus(`show`, `Loading File...`);
 
-    if (isAfter30 < whenAfter30) {
-      hit.state = `Paid`;
-    }
-  }
+    const json = JSON.parse(event.target.result);
 
-  return hit;
-}
-
-function importFileDaysRecount() {
-  const [dates] = arguments;
-
-  const promiseData = {};
-
-  return new Promise(async resolve => {
-    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
-      [`hit`],
-      `readonly`
-    );
-    const objectStore = transaction.objectStore(`hit`);
-
-    for (let i = 0, length = dates.length; i < length; i++) {
-      const date = dates[i];
-
-      const dateCount = {
-        assigned: 0,
-        returned: 0,
-        abandoned: 0,
-        paid: 0,
-        approved: 0,
-        rejected: 0,
-        submitted: 0,
-        earnings: 0
-      };
-
-      objectStore
-        .index(`date`)
-        .openCursor(window.IDBKeyRange.only(date)).onsuccess = event => {
-        const cursor = event.target.result;
-
-        if (cursor) {
-          const state = cursor.value.state.toLowerCase();
-
-          dateCount[state]++;
-
-          if (state.match(/paid/))
-            dateCount.earnings += cursor.value.reward.amount_in_dollars;
-
-          cursor.continue();
-        } else {
-          dateCount.earnings = dateCount.earnings.toFixed(2);
-          promiseData[date] = dateCount;
-        }
-      };
+    if (json.hits && json.days) {
+      await importFileHits(json.hits);
+      await importFileDays(json.days);
+    } else if (json.HIT && json.STATS) {
+      const converted = importFileConvertHITDB(json);
+      await importFileHits(converted.hits);
+      await importFileDays(converted.days);
     }
 
-    transaction.oncomplete = event => {
-      resolve(promiseData);
-    };
-  });
-}
-
-async function exportFile() {
-  currentStatus(`show`, `Getting Data...`);
-
-  const data = JSON.stringify({
-    hits: await exportFileHits(),
-    days: await exportFileDays()
-  });
-
-  currentStatus(`update`, `Generating File...`);
-
-  const exportFile = document.getElementById(`export-file`);
-  exportFile.href = window.URL.createObjectURL(
-    new window.Blob([data], { type: `application/json` })
-  );
-  exportFile.download = `HIT_Tracker_Backup_${mturkDate()}.json`;
-  exportFile.click();
-
-  currentStatus(`hide`);
+    currentStatus(`hide`);
+  };
 }
 
 function exportFileHits() {
@@ -1291,10 +1217,11 @@ function exportFileHits() {
         cursor.continue();
       }
 
-      currentStatus(`update`, `Processing HITs... ${++index}`);
+      index += 1;
+      currentStatus(`update`, `Processing HITs... ${index}`);
     };
 
-    transaction.oncomplete = event => {
+    transaction.oncomplete = () => {
       resolve(promiseData);
     };
   });
@@ -1319,32 +1246,34 @@ function exportFileDays() {
         cursor.continue();
       }
 
-      currentStatus(`update`, `Processing Days... ${++index}`);
+      index += 1;
+      currentStatus(`update`, `Processing Days... ${index}`);
     };
 
-    transaction.oncomplete = event => {
+    transaction.oncomplete = () => {
       resolve(promiseData);
     };
   });
 }
 
-function currentStatus() {
-  const [type, message] = arguments;
+async function exportFile() {
+  currentStatus(`show`, `Getting Data...`);
 
-  const statusModal = document.getElementById(`status-modal`);
+  const data = JSON.stringify({
+    hits: await exportFileHits(),
+    days: await exportFileDays()
+  });
 
-  if (type === `show`)
-    $(statusModal).modal({ backdrop: `static`, keyboard: false });
-  else if (type === `hide`) $(statusModal).modal(`hide`);
+  currentStatus(`update`, `Generating File...`);
 
-  document.getElementById(`status-message`).textContent = message || ``;
-}
+  const exportFileSave = document.getElementById(`export-file`);
+  exportFileSave.href = window.URL.createObjectURL(
+    new window.Blob([data], { type: `application/json` })
+  );
+  exportFileSave.download = `HIT_Tracker_Backup_${mturkDate()}.json`;
+  exportFileSave.click();
 
-function toMoneyString() {
-  const [string] = arguments;
-  return `$${Number(string)
-    .toFixed(2)
-    .toLocaleString(`en-US`, { minimumFractionDigits: 2 })}`;
+  currentStatus(`hide`);
 }
 
 function createDoughnutChart(card, groups) {
@@ -1913,7 +1842,6 @@ overviewPending();
 overviewAwaiting();
 overviewTransfer();
 
-
 function expander(event) {
   const el = event.target.closest(`[id]`);
   const btn = el.querySelector(`.btn`);
@@ -1936,3 +1864,44 @@ function expander(event) {
   const el = document.querySelector(`#overview-${i} .btn`);
   el.addEventListener(`click`, expander);
 });
+
+document.getElementById(`sync-today`).addEventListener(`click`, async () => {
+  await syncDay(mturkDate());
+
+  chrome.runtime.sendMessage({
+    hitTrackerGetProjected: true
+  });
+
+  window.location.reload();
+});
+
+document.getElementById(`sync-last-45`).addEventListener(`click`, async () => {
+  await syncLast45();
+
+  chrome.runtime.sendMessage({
+    hitTrackerGetProjected: true
+  });
+
+  window.location.reload();
+});
+
+document
+  .getElementById(`requester-overview`)
+  .addEventListener(`click`, requesterOverview);
+
+document
+  .getElementById(`daily-overview`)
+  .addEventListener(`click`, dailyOverview);
+
+document.getElementById(`search`).addEventListener(`click`, search);
+
+document
+  .getElementById(`import`)
+  .addEventListener(`click`, () =>
+    document.getElementById(`import-file`).click()
+  );
+document
+  .getElementById(`import-file`)
+  .addEventListener(`change`, event => importFile(event.target.files[0]));
+
+document.getElementById(`export`).addEventListener(`click`, () => exportFile());
