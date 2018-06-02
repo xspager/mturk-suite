@@ -7,6 +7,48 @@ Object.assign(Number.prototype, {
   }
 });
 
+function returnWeek() {
+  const date = new Date(Date.now());
+  const toPST = date.toLocaleString(`en-US`, {
+    timeZone: `America/Los_Angeles`
+  });
+  const isPST = new Date(toPST);
+  const day = isPST.getDay();
+  const mod = day > 0 ? 0 : 7;
+
+  const p = s => `0${s}`.slice(-2);
+  const offset = n => isPST.getDate() - isPST.getDay() - (n || 0);
+  const yyyymmdd = d => `${d.getFullYear() + p(d.getMonth()) + p(d.getDate())}`;
+
+  const start = new Date(isPST.setDate(offset(mod)));
+  const end = new Date(isPST.setDate(offset() + 6));
+
+  return {
+    start: yyyymmdd(start),
+    end: yyyymmdd(end),
+    which: day > 0 ? `This Week` : `Last Week`
+  };
+}
+
+function returnMonth() {
+  const date = new Date(Date.now());
+  const toPST = date.toLocaleString(`en-US`, {
+    timeZone: `America/Los_Angeles`
+  });
+  const isPST = new Date(toPST);
+
+  const d = isPST.getDate();
+  const m = isPST.getMonth() + (d > 1 ? 1 : 0);
+  const mm = `0${m}`.slice(-2);
+  const yyyy = isPST.getFullYear().toString();
+
+  return {
+    start: `${yyyy}${mm}01`,
+    end: `${yyyy}${mm}31`,
+    which: d > 1 ? `This Month` : `Last Month`
+  };
+}
+
 // Opens the specified IndexedDB
 function openDatabase(name, version) {
   return new Promise(resolve => {
@@ -123,7 +165,10 @@ function fetchDashboard(date) {
 
 function updateDashboard(days) {
   return new Promise(async resolve => {
-    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`day`], `readwrite`);
+    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
+      [`day`],
+      `readwrite`
+    );
     const objectStore = transaction.objectStore(`day`);
 
     for (const day in days) {
@@ -160,7 +205,10 @@ function checkDays(days) {
   const daysArray = Object.keys(days).sort();
 
   return new Promise(async resolve => {
-    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`day`], `readwrite`);
+    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
+      [`day`],
+      `readwrite`
+    );
     const objectStore = transaction.objectStore(`day`);
     const bound = IDBKeyRange.bound(
       daysArray[0],
@@ -204,7 +252,10 @@ function saveDay(date) {
   return new Promise(async resolve => {
     const count = await countDay(date);
 
-    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`day`], `readwrite`);
+    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
+      [`day`],
+      `readwrite`
+    );
     const objectStore = transaction.objectStore(`day`);
 
     const request = objectStore.get(date);
@@ -242,7 +293,10 @@ function countDay(date) {
       earnings: 0
     };
 
-    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`hit`], `readonly`);
+    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
+      [`hit`],
+      `readonly`
+    );
     const objectStore = transaction.objectStore(`hit`);
     const index = objectStore.index(`date`);
     const only = IDBKeyRange.only(date);
@@ -276,7 +330,10 @@ function syncPrepareDay(date) {
     const queue = await fetchQueue();
     const hit_ids = queue.tasks.map(o => o.task_id);
 
-    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`hit`], `readwrite`);
+    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
+      [`hit`],
+      `readwrite`
+    );
     const objectStore = transaction.objectStore(`hit`);
     const index = objectStore.index(`date`);
     const only = IDBKeyRange.only(date);
@@ -330,7 +387,10 @@ function sync(date) {
             )} for ${json.total_num_results} HITs`
           );
 
-          const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`hit`], `readwrite`);
+          const transaction = (await openDatabase(
+            `hitTrackerDB`,
+            1
+          )).transaction([`hit`], `readwrite`);
           const objectStore = transaction.objectStore(`hit`);
 
           for (const hit of json.results) {
@@ -491,7 +551,10 @@ async function requesterOverview() {
   const dateTo = document.getElementById(`date-to`).value;
   const dateFrom = document.getElementById(`date-from`).value;
 
-  const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`hit`], `readonly`);
+  const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
+    [`hit`],
+    `readonly`
+  );
   const objectStore = transaction.objectStore(`hit`);
   const range = IDBKeyRange.bound(
     dateFrom.replace(/-/g, ``) || `0`,
@@ -604,7 +667,10 @@ async function dailyOverview() {
   const dateTo = document.getElementById(`date-to`).value;
   const dateFrom = document.getElementById(`date-from`).value;
 
-  const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`day`], `readonly`);
+  const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
+    [`day`],
+    `readonly`
+  );
   const objectStore = transaction.objectStore(`day`);
 
   if (dateTo || dateFrom) {
@@ -760,7 +826,10 @@ async function search() {
   const dateTo = document.getElementById(`date-to`).value;
   const dateFrom = document.getElementById(`date-from`).value;
 
-  const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`hit`], `readonly`);
+  const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
+    [`hit`],
+    `readonly`
+  );
   const objectStore = transaction.objectStore(`hit`);
   let request;
 
@@ -1022,7 +1091,10 @@ function importFileHits() {
   currentStatus(`update`, `Importing HITs...`);
 
   return new Promise(async resolve => {
-    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`hit`], `readwrite`);
+    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
+      [`hit`],
+      `readwrite`
+    );
     const objectStore = transaction.objectStore(`hit`);
 
     for (
@@ -1051,7 +1123,10 @@ function importFileDays() {
     const datesToRecount = days.map(currentValue => currentValue.date);
     const recounted = await importFileDaysRecount(datesToRecount);
 
-    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`day`], `readwrite`);
+    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
+      [`day`],
+      `readwrite`
+    );
     const objectStore = transaction.objectStore(`day`);
 
     for (
@@ -1130,7 +1205,10 @@ function importFileDaysRecount() {
   const promiseData = {};
 
   return new Promise(async resolve => {
-    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`hit`], `readonly`);
+    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
+      [`hit`],
+      `readonly`
+    );
     const objectStore = transaction.objectStore(`hit`);
 
     for (let i = 0, length = dates.length; i < length; i++) {
@@ -1199,7 +1277,10 @@ function exportFileHits() {
   const promiseData = [];
 
   return new Promise(async resolve => {
-    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`hit`], `readonly`);
+    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
+      [`hit`],
+      `readonly`
+    );
     const objectStore = transaction.objectStore(`hit`);
 
     objectStore.openCursor().onsuccess = event => {
@@ -1224,7 +1305,10 @@ function exportFileDays() {
   const promiseData = [];
 
   return new Promise(async resolve => {
-    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`day`], `readonly`);
+    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction(
+      [`day`],
+      `readonly`
+    );
     const objectStore = transaction.objectStore(`day`);
 
     objectStore.openCursor().onsuccess = event => {
@@ -1311,7 +1395,6 @@ function createDoughnutChart(card, groups) {
 }
 
 function createDaysLineChart(card, worked) {
-  const ctx = card.querySelector(`days canvas`).getContext(`2d`);
   const days = Object.keys(worked);
   const info = days.map(key => (worked[key] || 0.001).random().toFixed(2));
 
@@ -1372,7 +1455,7 @@ function createDaysLineChart(card, worked) {
   };
 
   // eslint-disable-next-line
-  new Chart(ctx, {
+  new Chart(card.querySelector(`days canvas`), {
     type: "line",
     data,
     options
@@ -1764,7 +1847,9 @@ async function overviewPending() {
   };
 
   transaction.oncomplete = () => {
-    document.getElementById(`overview-pending`).innerHTML = `<div class="col-6">
+    const el = document.querySelector(`#overview-pending overview`);
+
+    el.innerHTML = `<div class="col-6">
         <h3 class="p-4 text-center">${value.toMoneyString()}</h3>
       </div>
       <div class="col-6">
@@ -1793,9 +1878,9 @@ async function overviewAwaiting() {
   };
 
   transaction.oncomplete = () => {
-    document.getElementById(
-      `overview-awaiting`
-    ).innerHTML = `<div class="col-6">
+    const el = document.querySelector(`#overview-awaiting overview`);
+
+    el.innerHTML = `<div class="col-6">
         <h3 class="p-4 text-center">${value.toMoneyString()}</h3>
       </div>
       <div class="col-6">
@@ -1814,7 +1899,9 @@ async function overviewTransfer() {
 
   const { available_earnings } = await response.json();
 
-  document.getElementById(`overview-transfer`).innerHTML = `<div class="col-12">
+  const el = document.querySelector(`#overview-transfer overview`);
+
+  el.innerHTML = `<div class="col-12">
       <h3 class="p-4 text-center">${available_earnings.amount_in_dollars.toMoneyString()}</h3>
     </div>`;
 }
@@ -1826,98 +1913,26 @@ overviewPending();
 overviewAwaiting();
 overviewTransfer();
 
-function returnWeek() {
-  const date = new Date(Date.now());
-  const toPST = date.toLocaleString(`en-US`, {
-    timeZone: `America/Los_Angeles`
-  });
-  const isPST = new Date(toPST);
-  const day = isPST.getDay();
-  const mod = day > 0 ? 0 : 7;
 
-  const p = s => `0${s}`.slice(-2);
-  const offset = n => isPST.getDate() - isPST.getDay() - (n || 0);
-  const yyyymmdd = d => `${d.getFullYear() + p(d.getMonth()) + p(d.getDate())}`;
+function expander(event) {
+  const el = event.target.closest(`[id]`);
+  const btn = el.querySelector(`.btn`);
+  const expandable = el.querySelector(`.expandable`);
 
-  const start = new Date(isPST.setDate(offset(mod)));
-  const end = new Date(isPST.setDate(offset() + 6));
-
-  return {
-    start: yyyymmdd(start),
-    end: yyyymmdd(end),
-    which: day > 0 ? `This Week` : `Last Week`
-  };
+  if (el.classList.contains(`bg-dark`)) {
+    el.style = ``;
+    el.classList.remove(`bg-dark`);
+    btn.classList.remove(`h-100`);
+    expandable.hidden = true;
+  } else {
+    el.style = `width: 100vw !important; max-width: 10000; z-index: 99999; position: absolute; padding: 0; height: 80vh;`;
+    el.classList.add(`bg-dark`);
+    btn.classList.add(`h-100`);
+    expandable.hidden = false;
+  }
 }
 
-function getWeek(dateToUse) {
-  const moment = dateToUse || new Date(); // If a test date isn't passed, get current one
-  const amz = new Date(
-    moment.toLocaleString("en-US", { timeZone: "America/Los_Angeles" })
-  ); // Set everything to Bezos time. (PST/PDT)
-  function pad(p) {
-    // Used to pad month and day with leading 0 if necessary
-    return ("0" + p).slice(-2);
-  }
-  function amzformat(d) {
-    // Return a string in the format YYYYMMDD
-    return d.getFullYear() + "" + pad(d.getMonth()) + pad(d.getDate());
-  }
-  function offset() {
-    // Calculate offset from current day to week start
-    return amz.getDate() - amz.getDay();
-  }
-
-  let start = new Date(amz.setDate(offset())); // Find Sunday of this week
-  let end = new Date(amz.setDate(offset() + 6)); // Find Saturday of this week
-
-  return { start: amzformat(start), end: amzformat(end) }; // return object of {start: YYYYMMDD, end: YYYYMMDD}
-}
-
-function returnMonth() {
-  const date = new Date(Date.now());
-  const toPST = date.toLocaleString(`en-US`, {
-    timeZone: `America/Los_Angeles`
-  });
-  const isPST = new Date(toPST);
-
-  const d = isPST.getDate();
-  const m = isPST.getMonth() + (d > 1 ? 1 : 0);
-  const mm = `0${m}`.slice(-2);
-  const yyyy = isPST.getFullYear().toString();
-
-  return {
-    start: `${yyyy}${mm}01`,
-    end: `${yyyy}${mm}31`,
-    which: d > 1 ? `This Month` : `Last Month`
-  };
-}
-
-[`today`, `week`, `month`].forEach(i =>
-  document
-    .querySelector(`#overview-${i} .btn`)
-    .addEventListener(`click`, event => {
-      const el = event.target.closest(`[id]`);
-      const btn = el.querySelector(`.btn`);
-      const expandable = el.querySelector(`.expandable`);
-
-      if (el.classList.contains(`bg-dark`)) {
-        el.style = ``;
-        el.classList.remove(`bg-dark`);
-        btn.classList.remove(`h-100`);
-        expandable.hidden = true;
-      } else {
-        el.style = `width: 100vw !important; max-width: 10000; z-index: 99999; position: absolute; padding: 0; height: 80vh;`;
-        el.classList.add(`bg-dark`);
-        btn.classList.add(`h-100`);
-        expandable.hidden = false;
-      }
-    })
-);
-/*
-document
-  .getElementById(`overview-today`)
-  .querySelector(`.btn`)
-  .addEventListener(`click`, event => {
-    
-  });
-  */
+[`today`, `week`, `month`].forEach(i => {
+  const el = document.querySelector(`#overview-${i} .btn`);
+  el.addEventListener(`click`, expander);
+});
