@@ -1,10 +1,9 @@
 Object.assign(Number.prototype, {
   random() {
-    return this; //Math.round(Math.random() * 100);
+    return this; // Math.round(Math.random() * 100);
   },
   toMoneyString() {
-    // return `$0.00`;
-    return `$${(this.random()).toFixed(2)}`;
+    return `$${this.random().toFixed(2)}`;
   }
 });
 
@@ -14,289 +13,6 @@ function openDatabase(name, version) {
     const request = window.indexedDB.open(name, version);
     request.onsuccess = event => resolve(event.target.result);
   });
-}
-
-async function todaysOverview() {
-  const data = await todaysOverviewData();
-  todaysOverviewDisplay(data);
-}
-
-function todaysOverviewData() {
-  const promiseData = {
-    hits: {
-      assigned: { count: 0, value: 0 },
-      submitted: { count: 0, value: 0 },
-      approved: { count: 0, value: 0 },
-      rejected: { count: 0, value: 0 },
-      pending: { count: 0, value: 0 },
-      returned: { count: 0, value: 0 }
-    },
-    requesters: {}
-  };
-
-  const hits = promiseData.hits;
-  const reqs = promiseData.requesters;
-
-  return new Promise(resolve => {
-    const transaction = hitTrackerDB.transaction([`hit`], `readonly`);
-    const objectStore = transaction.objectStore(`hit`);
-    const range = window.IDBKeyRange.only(mturkDate());
-
-    objectStore.index(`date`).openCursor(range).onsuccess = event => {
-      const cursor = event.target.result;
-
-      if (cursor) {
-        const hit = cursor.value;
-        const state = hit.state;
-        const reward = hit.reward.amount_in_dollars;
-        const requesterId = hit.requester_id;
-
-        if (state.match(/Submitted|Pending|Approved|Paid/)) {
-          hits.submitted.count++;
-          hits.submitted.value += reward;
-
-          if (state.match(/Approved|Paid/)) {
-            hits.approved.count++;
-            hits.approved.value += reward;
-          } else if (state.match(/Submitted|Pending/)) {
-            hits.pending.count++;
-            hits.pending.value += reward;
-          }
-
-          if (!reqs[requesterId]) {
-            reqs[requesterId] = {
-              id: requesterId,
-              name: hit.requester_name,
-              count: 1,
-              value: reward
-            };
-          } else {
-            reqs[requesterId].count++;
-            reqs[requesterId].value += reward;
-          }
-        } else if (state.match(/Returned/)) {
-          hits.returned.count++;
-          hits.returned.value += reward;
-        } else if (state.match(/Rejected/)) {
-          hits.rejected.count++;
-          hits.rejected.value += reward;
-        }
-
-        hits.assigned.count++;
-        hits.assigned.value += reward;
-        cursor.continue();
-      }
-    };
-
-    transaction.oncomplete = event => {
-      resolve(promiseData);
-    };
-  });
-}
-
-function todaysOverviewDisplay() {
-  const [data] = arguments;
-
-  const hits = data.hits;
-  const reqs = data.requesters;
-
-  document.getElementById(`assigned-count`).textContent = hits.assigned.count;
-  document.getElementById(`assigned-value`).textContent = toMoneyString(
-    hits.assigned.value
-  );
-
-  document.getElementById(`submitted-count`).textContent = hits.submitted.count;
-  document.getElementById(`submitted-value`).textContent = toMoneyString(
-    hits.submitted.value
-  );
-
-  document.getElementById(`approved-count`).textContent = hits.approved.count;
-  document.getElementById(`approved-value`).textContent = toMoneyString(
-    hits.approved.value
-  );
-
-  document.getElementById(`rejected-count`).textContent = hits.rejected.count;
-  document.getElementById(`rejected-value`).textContent = toMoneyString(
-    hits.rejected.value
-  );
-
-  document.getElementById(`pending-count`).textContent = hits.pending.count;
-  document.getElementById(`pending-value`).textContent = toMoneyString(
-    hits.pending.value
-  );
-
-  document.getElementById(`returned-count`).textContent = hits.returned.count;
-  document.getElementById(`returned-value`).textContent = toMoneyString(
-    hits.returned.value
-  );
-
-  const requesterTbody = document.getElementById(`requester-tbody`);
-
-  while (requesterTbody.firstChild) {
-    requesterTbody.removeChild(requesterTbody.firstChild);
-  }
-
-  const sorted = Object.keys(reqs).sort(
-    (a, b) => reqs[a].value - reqs[b].value
-  );
-
-  for (let i = sorted.length - 1; i > -1; i--) {
-    const req = reqs[sorted[i]];
-
-    const row = document.createElement(`tr`);
-
-    const requester = document.createElement(`td`);
-    row.append(requester);
-
-    const requesterLink = document.createElement(`a`);
-    requesterLink.href = `https://worker.mturk.com/requesters/${
-      req.id
-    }/projects`;
-    requesterLink.target = `_blank`;
-    requesterLink.textContent = req.name;
-    requester.appendChild(requesterLink);
-
-    const count = document.createElement(`td`);
-    count.textContent = req.count;
-    row.appendChild(count);
-
-    const value = document.createElement(`td`);
-    value.textContent = toMoneyString(req.value);
-    row.appendChild(value);
-
-    requesterTbody.appendChild(row);
-  }
-
-  document.getElementById(`tracker-projected-today-count`).textContent =
-    hits.submitted.count;
-  document.getElementById(
-    `tracker-projected-today-value`
-  ).textContent = toMoneyString(hits.submitted.value);
-}
-
-async function trackerOverview() {
-  const data = await trackerOverviewData();
-  trackerOverviewDisplay(data);
-  chart(data.days);
-}
-
-function trackerOverviewData() {
-  const promiseData = {
-    week: { count: 0, value: 0 },
-    month: { count: 0, value: 0 },
-    pending: { count: 0, value: 0 },
-    approved: { count: 0, value: 0 },
-    days: {}
-  };
-
-  return new Promise(resolve => {
-    const transaction = hitTrackerDB.transaction([`hit`], `readonly`);
-    const objectStore = transaction.objectStore(`hit`);
-    const week = getWeekKludge();
-    const month = getMonth();
-
-    if (week.day === 0)
-      document.getElementById(`which-week`).textContent = `Last`;
-
-    // pending week
-    objectStore
-      .index(`date`)
-      .openCursor(
-        window.IDBKeyRange.bound(week.start, week.end)
-      ).onsuccess = event => {
-      const cursor = event.target.result;
-
-      if (cursor) {
-        if (cursor.value.state.match(/Submitted|Pending|Approved|Paid/)) {
-          promiseData.week.count++;
-          promiseData.week.value += cursor.value.reward.amount_in_dollars;
-        }
-        cursor.continue();
-      }
-    };
-
-    // pending month
-    objectStore
-      .index(`date`)
-      .openCursor(
-        window.IDBKeyRange.bound(month.start, month.end)
-      ).onsuccess = event => {
-      const cursor = event.target.result;
-
-      if (cursor) {
-        if (cursor.value.state.match(/Submitted|Pending|Approved|Paid/)) {
-          promiseData.month.count += 1;
-          promiseData.month.value += cursor.value.reward.amount_in_dollars;
-
-          const day = cursor.value.date.slice(-2);
-          if (promiseData.days[day]) {
-            promiseData.days[day] += cursor.value.reward.amount_in_dollars;
-          } else {
-            promiseData.days[day] = cursor.value.reward.amount_in_dollars;
-          }
-        }
-        cursor.continue();
-      }
-    };
-
-    // submitted pending approval or rejection
-    objectStore
-      .index(`state`)
-      .openCursor(window.IDBKeyRange.only(`Submitted`)).onsuccess = event => {
-      const cursor = event.target.result;
-
-      if (cursor) {
-        promiseData.pending.count++;
-        promiseData.pending.value += cursor.value.reward.amount_in_dollars;
-        cursor.continue();
-      }
-    };
-
-    // approved waiting payment
-    objectStore
-      .index(`state`)
-      .openCursor(window.IDBKeyRange.only(`Approved`)).onsuccess = event => {
-      const cursor = event.target.result;
-
-      if (cursor) {
-        promiseData.approved.count++;
-        promiseData.approved.value += cursor.value.reward.amount_in_dollars;
-        cursor.continue();
-      }
-    };
-
-    transaction.oncomplete = event => {
-      resolve(promiseData);
-    };
-  });
-}
-
-function trackerOverviewDisplay() {
-  const [data] = arguments;
-
-  document.getElementById(`tracker-projected-week-count`).textContent =
-    data.week.count;
-  document.getElementById(
-    `tracker-projected-week-value`
-  ).textContent = toMoneyString(data.week.value);
-
-  document.getElementById(`tracker-projected-month-count`).textContent =
-    data.month.count;
-  document.getElementById(
-    `tracker-projected-month-value`
-  ).textContent = toMoneyString(data.month.value);
-
-  document.getElementById(`tracker-pending-count`).textContent =
-    data.pending.count;
-  document.getElementById(`tracker-pending-value`).textContent = toMoneyString(
-    data.pending.value
-  );
-
-  document.getElementById(`tracker-approved-count`).textContent =
-    data.approved.count;
-  document.getElementById(`tracker-approved-value`).textContent = toMoneyString(
-    data.approved.value
-  );
 }
 
 // refactor needed
@@ -406,8 +122,8 @@ function fetchDashboard(date) {
 }
 
 function updateDashboard(days) {
-  return new Promise(resolve => {
-    const transaction = hitTrackerDB.transaction([`day`], `readwrite`);
+  return new Promise(async resolve => {
+    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`day`], `readwrite`);
     const objectStore = transaction.objectStore(`day`);
 
     for (const day in days) {
@@ -443,8 +159,8 @@ function checkDays(days) {
 
   const daysArray = Object.keys(days).sort();
 
-  return new Promise(resolve => {
-    const transaction = hitTrackerDB.transaction([`day`], `readwrite`);
+  return new Promise(async resolve => {
+    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`day`], `readwrite`);
     const objectStore = transaction.objectStore(`day`);
     const bound = IDBKeyRange.bound(
       daysArray[0],
@@ -488,7 +204,7 @@ function saveDay(date) {
   return new Promise(async resolve => {
     const count = await countDay(date);
 
-    const transaction = hitTrackerDB.transaction([`day`], `readwrite`);
+    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`day`], `readwrite`);
     const objectStore = transaction.objectStore(`day`);
 
     const request = objectStore.get(date);
@@ -510,7 +226,7 @@ function saveDay(date) {
 }
 
 function countDay(date) {
-  return new Promise(resolve => {
+  return new Promise(async resolve => {
     const object = {
       date: date,
 
@@ -526,7 +242,7 @@ function countDay(date) {
       earnings: 0
     };
 
-    const transaction = hitTrackerDB.transaction([`hit`], `readonly`);
+    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`hit`], `readonly`);
     const objectStore = transaction.objectStore(`hit`);
     const index = objectStore.index(`date`);
     const only = IDBKeyRange.only(date);
@@ -560,7 +276,7 @@ function syncPrepareDay(date) {
     const queue = await fetchQueue();
     const hit_ids = queue.tasks.map(o => o.task_id);
 
-    const transaction = hitTrackerDB.transaction([`hit`], `readwrite`);
+    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`hit`], `readwrite`);
     const objectStore = transaction.objectStore(`hit`);
     const index = objectStore.index(`date`);
     const only = IDBKeyRange.only(date);
@@ -614,7 +330,7 @@ function sync(date) {
             )} for ${json.total_num_results} HITs`
           );
 
-          const transaction = hitTrackerDB.transaction([`hit`], `readwrite`);
+          const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`hit`], `readwrite`);
           const objectStore = transaction.objectStore(`hit`);
 
           for (const hit of json.results) {
@@ -958,7 +674,7 @@ async function requesterOverview() {
   const dateTo = document.getElementById(`date-to`).value;
   const dateFrom = document.getElementById(`date-from`).value;
 
-  const transaction = hitTrackerDB.transaction([`hit`], `readonly`);
+  const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`hit`], `readonly`);
   const objectStore = transaction.objectStore(`hit`);
   const range = IDBKeyRange.bound(
     dateFrom.replace(/-/g, ``) || `0`,
@@ -1071,7 +787,7 @@ async function dailyOverview() {
   const dateTo = document.getElementById(`date-to`).value;
   const dateFrom = document.getElementById(`date-from`).value;
 
-  const transaction = hitTrackerDB.transaction([`day`], `readonly`);
+  const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`day`], `readonly`);
   const objectStore = transaction.objectStore(`day`);
 
   if (dateTo || dateFrom) {
@@ -1227,7 +943,7 @@ async function search() {
   const dateTo = document.getElementById(`date-to`).value;
   const dateFrom = document.getElementById(`date-from`).value;
 
-  const transaction = hitTrackerDB.transaction([`hit`], `readonly`);
+  const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`hit`], `readonly`);
   const objectStore = transaction.objectStore(`hit`);
   let request;
 
@@ -1488,8 +1204,8 @@ function importFileHits() {
 
   currentStatus(`update`, `Importing HITs...`);
 
-  return new Promise(resolve => {
-    const transaction = hitTrackerDB.transaction([`hit`], `readwrite`);
+  return new Promise(async resolve => {
+    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`hit`], `readwrite`);
     const objectStore = transaction.objectStore(`hit`);
 
     for (
@@ -1596,8 +1312,8 @@ function importFileDaysRecount() {
 
   const promiseData = {};
 
-  return new Promise(resolve => {
-    const transaction = hitTrackerDB.transaction([`hit`], `readonly`);
+  return new Promise(async resolve => {
+    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`hit`], `readonly`);
     const objectStore = transaction.objectStore(`hit`);
 
     for (let i = 0, length = dates.length; i < length; i++) {
@@ -1665,8 +1381,8 @@ function exportFileHits() {
   let index = 0;
   const promiseData = [];
 
-  return new Promise(resolve => {
-    const transaction = hitTrackerDB.transaction([`hit`], `readonly`);
+  return new Promise(async resolve => {
+    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`hit`], `readonly`);
     const objectStore = transaction.objectStore(`hit`);
 
     objectStore.openCursor().onsuccess = event => {
@@ -1690,8 +1406,8 @@ function exportFileDays() {
   let index = 0;
   const promiseData = [];
 
-  return new Promise(resolve => {
-    const transaction = hitTrackerDB.transaction([`day`], `readonly`);
+  return new Promise(async resolve => {
+    const transaction = (await openDatabase(`hitTrackerDB`, 1)).transaction([`day`], `readonly`);
     const objectStore = transaction.objectStore(`day`);
 
     objectStore.openCursor().onsuccess = event => {
@@ -1728,25 +1444,6 @@ function toMoneyString() {
   return `$${Number(string)
     .toFixed(2)
     .toLocaleString(`en-US`, { minimumFractionDigits: 2 })}`;
-}
-
-function daysThisMonth() {
-  const date = new Date(Date.now());
-  const toPST = date.toLocaleString(`en-US`, {
-    timeZone: `America/Los_Angeles`
-  });
-  const isPST = new Date(toPST);
-  const month = isPST.getMonth();
-  isPST.setDate(1);
-
-  const result = [];
-
-  while (isPST.getMonth() === month) {
-    const day = isPST.getDate();
-    result.push(`0${day}`.slice(-2));
-    isPST.setDate(day + 1);
-  }
-  return result;
 }
 
 function createDoughnutChart(card, groups) {
@@ -1796,13 +1493,15 @@ function createDoughnutChart(card, groups) {
   card.querySelector(`.h6`).textContent = `${(0).toMoneyString()}/hr`;
 }
 
-function createLineChart(card, worked) {
+function createDaysLineChart(card, worked) {
   const ctx = card.querySelector(`days canvas`).getContext(`2d`);
   const days = Object.keys(worked);
   const info = days.map(key => (worked[key] || 0.001).random().toFixed(2));
 
   const data = {
-    labels: days,
+    labels: days.map(item =>
+      [item.slice(4, 6), `-`, item.slice(6, 8)].join(``)
+    ),
     datasets: [
       {
         label: `Daily Earnings`,
@@ -1818,7 +1517,7 @@ function createLineChart(card, worked) {
     maintainAspectRatio: false,
     elements: {
       line: {
-        tension: 0 // disables bezier curves
+        tension: 0.25
       }
     },
     tooltips: {
@@ -1827,30 +1526,28 @@ function createLineChart(card, worked) {
     },
     legend: {
       labels: {
-        fontColor: "white"
+        fontColor: "white",
+        boxWidth: 0
       }
     },
     scales: {
       xAxes: [
         {
           gridLines: {
-            color: `#FFFFFF`
-            // display: false,
+            display: false
           },
           ticks: {
-            fontColor: `#FFFFFF` // this here
+            fontColor: `#FFFFFF`
           }
         }
       ],
       yAxes: [
         {
-          // display: false,
           gridLines: {
-            color: `#FFFFFF`
-            // display: false,
+            display: false
           },
           ticks: {
-            fontColor: `#FFFFFF` // this here
+            fontColor: `#FFFFFF`
           }
         }
       ]
@@ -1865,17 +1562,98 @@ function createLineChart(card, worked) {
   });
 }
 
-function createSpreadChart(spread) {
+function createCountsBarChart(card, counts) {
   const data = {
     datasets: [
       {
+        label: `Status Breakdown`,
+        fontColor: `white`,
         data: [
-          spread[`0-4`],
-          spread[`5-9`],
-          spread[`10-19`],
-          spread[`20-49`],
-          spread[`50-99`],
-          spread[`100+`]
+          counts.assigned.count.random(),
+          counts.submitted.count.random(),
+          counts.approved.count.random(),
+          counts.rejected.count.random(),
+          counts.pending.count.random(),
+          counts.returned.count.random()
+        ],
+        backgroundColor: [
+          `#6c757d`,
+          `#343a40`,
+          `#6c757d`,
+          `#343a40`,
+          `#6c757d`,
+          `#343a40`
+        ]
+      }
+    ],
+
+    labels: [
+      `Assigned`,
+      `Submitted`,
+      `Approved`,
+      `Rejected`,
+      `Pending`,
+      `Returned`
+    ]
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    legend: {
+      labels: {
+        fontColor: `white`,
+        boxWidth: 0
+      }
+    },
+    scales: {
+      xAxes: [
+        {
+          gridLines: {
+            color: `#FFFFFF`,
+            display: false
+          },
+          ticks: {
+            fontColor: `#FFFFFF`, // this here
+            fontSize: 8
+          }
+        }
+      ],
+      yAxes: [
+        {
+          // display: false,
+          gridLines: {
+            color: `#FFFFFF`,
+            display: false
+          },
+          ticks: {
+            fontColor: `#FFFFFF` // this here
+          }
+        }
+      ]
+    }
+  };
+
+  // eslint-disable-next-line
+  new Chart(card.querySelector(`counts canvas`), {
+    type: "bar",
+    data,
+    options
+  });
+}
+
+function createRewardsBarChart(card, spread) {
+  const data = {
+    datasets: [
+      {
+        label: `Reward Breakdown`,
+        data: [
+          spread[`0-4`].random(),
+          spread[`5-9`].random(),
+          spread[`10-19`].random(),
+          spread[`20-49`].random(),
+          spread[`50-99`].random(),
+          spread[`100+`].random()
         ],
         backgroundColor: [
           `#6c757d`,
@@ -1902,26 +1680,29 @@ function createSpreadChart(spread) {
     responsive: true,
     maintainAspectRatio: false,
     legend: {
-      display: false
+      labels: {
+        fontColor: `white`,
+        boxWidth: 0
+      }
     },
     scales: {
       xAxes: [
         {
           gridLines: {
-            color: `#FFFFFF`
-            // display: false,
+            color: `#FFFFFF`,
+            display: false
           },
           ticks: {
-            fontColor: `#FFFFFF` // this here
+            fontColor: `#FFFFFF`, // this here
+            fontSize: 8
           }
         }
       ],
       yAxes: [
         {
-          // display: false,
           gridLines: {
-            color: `#FFFFFF`
-            // display: false,
+            color: `#FFFFFF`,
+            display: false
           },
           ticks: {
             fontColor: `#FFFFFF` // this here
@@ -1932,7 +1713,7 @@ function createSpreadChart(spread) {
   };
 
   // eslint-disable-next-line
-  new Chart(document.getElementById(`daily-earnings-spread`), {
+  new Chart(card.querySelector(`rewards canvas`), {
     type: "bar",
     data,
     options
@@ -2073,7 +1854,7 @@ function createRequesterTable(card, requesters) {
       const { id, name, count, value } = requesters[key];
       return HTML`<tr>
         <td>
-          <a href="https://worker.mturk.com/requesters/${id}/projects" target="_blank">\${name}</a>
+          <a href="https://worker.mturk.com/requesters/${id}/projects" target="_blank">${name}</a>
         </td>
         <td>${count.random()}</td>
         <td>${value.toMoneyString()}</td>
@@ -2105,6 +1886,8 @@ async function overviewToday() {
 
   const card = document.getElementById(`overview-today`);
   createDoughnutChart(card, overview.groups);
+  createCountsBarChart(card, overview.counts);
+  createRewardsBarChart(card, overview.rewards);
   createRequesterTable(card, overview.requesters);
 }
 
@@ -2115,21 +1898,25 @@ async function overviewWeek() {
 
   const card = document.getElementById(`overview-week`);
   createDoughnutChart(card, overview.groups);
+  createDaysLineChart(card, overview.days);
+  createCountsBarChart(card, overview.counts);
+  createRewardsBarChart(card, overview.rewards);
   createRequesterTable(card, overview.requesters);
-  createLineChart(card, overview.days);
 }
 
 async function overviewMonth() {
   const card = document.getElementById(`overview-month`);
   const month = returnMonth();
   card.querySelector(`small`).textContent = month.which;
-  
+
   const range = IDBKeyRange.bound(month.start, month.end);
   const overview = await getOverview(range);
 
   createDoughnutChart(card, overview.groups);
+  createDaysLineChart(card, overview.days);
+  createCountsBarChart(card, overview.counts);
+  createRewardsBarChart(card, overview.rewards);
   createRequesterTable(card, overview.requesters);
-  createLineChart(card, overview.days);
 }
 
 async function overviewPending() {
@@ -2213,6 +2000,55 @@ overviewMonth();
 overviewPending();
 overviewAwaiting();
 overviewTransfer();
+
+function returnWeek() {
+  const date = new Date(Date.now());
+  const toPST = date.toLocaleString(`en-US`, {
+    timeZone: `America/Los_Angeles`
+  });
+  const isPST = new Date(toPST);
+  const day = isPST.getDay();
+  const mod = day > 0 ? 0 : 7;
+
+  const p = s => `0${s}`.slice(-2);
+  const offset = n => isPST.getDate() - isPST.getDay() - (n || 0);
+  const yyyymmdd = d => `${d.getFullYear() + p(d.getMonth()) + p(d.getDate())}`;
+
+  const start = new Date(isPST.setDate(offset(mod)));
+  const end = new Date(isPST.setDate(offset() + 6));
+
+  return {
+    start: yyyymmdd(start),
+    end: yyyymmdd(end),
+    which: day > 0 ? `This Week` : `Last Week`
+  };
+}
+
+console.log(`returnWeek`, returnWeek());
+
+function getWeek(dateToUse) {
+  const moment = dateToUse || new Date(); // If a test date isn't passed, get current one
+  const amz = new Date(
+    moment.toLocaleString("en-US", { timeZone: "America/Los_Angeles" })
+  ); // Set everything to Bezos time. (PST/PDT)
+  function pad(p) {
+    // Used to pad month and day with leading 0 if necessary
+    return ("0" + p).slice(-2);
+  }
+  function amzformat(d) {
+    // Return a string in the format YYYYMMDD
+    return d.getFullYear() + "" + pad(d.getMonth()) + pad(d.getDate());
+  }
+  function offset() {
+    // Calculate offset from current day to week start
+    return amz.getDate() - amz.getDay();
+  }
+
+  let start = new Date(amz.setDate(offset())); // Find Sunday of this week
+  let end = new Date(amz.setDate(offset() + 6)); // Find Saturday of this week
+
+  return { start: amzformat(start), end: amzformat(end) }; // return object of {start: YYYYMMDD, end: YYYYMMDD}
+}
 
 function returnMonth() {
   const date = new Date(Date.now());
