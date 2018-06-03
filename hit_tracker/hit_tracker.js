@@ -2,7 +2,7 @@
 
 Object.assign(Number.prototype, {
   random() {
-    return this;// Math.round(Math.random() * 100);
+    return this; // Math.round(Math.random() * 100);
   },
   toMoneyString() {
     return `$${this.random().toFixed(2)}`;
@@ -1730,11 +1730,14 @@ async function overviewToday() {
 }
 
 async function overviewWeek() {
+  const card = document.getElementById(`overview-week`);
   const week = returnWeek();
+  card.querySelector(`small`).textContent = week.which;
+
   const range = IDBKeyRange.bound(week.start, week.end);
   const overview = await getOverview(range);
 
-  const card = document.getElementById(`overview-week`);
+  
   createDoughnutChart(card, overview.groups);
   createDaysLineChart(card, overview.days);
   createCountsBarChart(card, overview.counts);
